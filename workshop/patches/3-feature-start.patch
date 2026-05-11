@@ -1,0 +1,27 @@
+From 0dd3ccbe94d1597950ed6e410ec086f3fb02f1eb Mon Sep 17 00:00:00 2001
+From: Cameron Cooke <cameron.cooke@sentry.io>
+Date: Mon, 11 May 2026 11:49:46 +0100
+Subject: [PATCH] Note: alertsEnabled not yet wired into UI
+
+The Settings toggle binds to WeatherUnits.alertsEnabled but nothing
+in the view layer consumes it yet. Marking with a TODO so it's not
+missed.
+---
+ app/Weather/Models/WeatherModels.swift | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/app/Weather/Models/WeatherModels.swift b/app/Weather/Models/WeatherModels.swift
+index 560c298..cac1272 100644
+--- a/app/Weather/Models/WeatherModels.swift
++++ b/app/Weather/Models/WeatherModels.swift
+@@ -204,6 +204,6 @@ struct WeatherUnits: Equatable, Sendable {
+     var pressure: PressureUnit = .millibars
+     var distance: DistanceUnit = .miles
+     var animationsEnabled = true
+-    var alertsEnabled = true
++    var alertsEnabled = true   // TODO: not yet wired into UI
+     var reduceTransparency = false
+ }
+-- 
+2.50.1 (Apple Git-155)
+

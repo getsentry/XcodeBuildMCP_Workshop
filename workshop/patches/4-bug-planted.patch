@@ -1,0 +1,41 @@
+From c83bf28c2347c7064465388652c105d45b251b7b Mon Sep 17 00:00:00 2001
+From: Cameron Cooke <cameron.cooke@sentry.io>
+Date: Mon, 11 May 2026 13:10:24 +0100
+Subject: [PATCH] Simplify CurrentWeather DTO mapping
+
+Drop the bounds check and 360->0 coercion in CurrentWeather.init(dto:).
+The upstream guarantees the value is in range, and WindDirection's
+invariant covers the rest. Removes a few lines of dead defense.
+---
+ app/Weather/Services/WeatherClientDTOs.swift | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/app/Weather/Services/WeatherClientDTOs.swift b/app/Weather/Services/WeatherClientDTOs.swift
+index 07a6f3d..ad63e3e 100644
+--- a/app/Weather/Services/WeatherClientDTOs.swift
++++ b/app/Weather/Services/WeatherClientDTOs.swift
+@@ -191,12 +191,6 @@ extension WeatherLocation {
+ 
+ extension CurrentWeather {
+     init(dto: CurrentWeatherDTO) throws {
+-        guard (0...360).contains(dto.windDirectionDegrees) else {
+-            throw WeatherDTOMappingError.invalidWindDirection(dto.windDirectionDegrees)
+-        }
+-
+-        let windDirectionDegrees = dto.windDirectionDegrees == 0 ? 360 : dto.windDirectionDegrees
+-
+         self.init(
+             id: dto.id,
+             temperatureC: dto.temperatureC,
+@@ -213,7 +207,7 @@ extension CurrentWeather {
+             uvIndex: dto.uvIndex,
+             uvCategory: UVIndexCategory(dto: dto.uvCategory),
+             windKph: dto.windKph,
+-            windDirection: WindDirection(degrees: windDirectionDegrees),
++            windDirection: WindDirection(degrees: dto.windDirectionDegrees),
+             humidity: dto.humidity,
+             visibilityKilometers: dto.visibilityKilometers,
+             pressureMillibars: dto.pressureMillibars,
+-- 
+2.50.1 (Apple Git-155)
+

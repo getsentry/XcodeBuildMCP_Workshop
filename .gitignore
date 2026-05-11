@@ -1,0 +1,5 @@
+.DS_Store
+
+# .mcp.json is managed by workshop/switch-stage.sh — present from Act 2 onward,
+# absent during Act 1 so the host can demo installing XcodeBuildMCP live.
+.mcp.json

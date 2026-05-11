@@ -1,0 +1,76 @@
+From 2568f155510060cfaf554ee53e0afb4a28fed3f6 Mon Sep 17 00:00:00 2001
+From: Cameron Cooke <cameron.cooke@sentry.io>
+Date: Mon, 11 May 2026 11:50:41 +0100
+Subject: [PATCH] Add severe weather alert banner
+
+Show a banner near the top of the main screen when alerts are
+enabled and the current condition is thunderstorms or heavy rain.
+Styled to match WeatherLoadingBanner; accessibility identifier
+'weather.alertBanner'.
+---
+ app/Weather/ContentView.swift | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/app/Weather/ContentView.swift b/app/Weather/ContentView.swift
+index ca85cbf..47956ab 100644
+--- a/app/Weather/ContentView.swift
++++ b/app/Weather/ContentView.swift
+@@ -70,7 +70,12 @@ struct ContentView: View {
+             WeatherLoadingBanner(isLoading: isLoadingWeather && report != nil, message: weatherErrorMessage)
+                 .padding(.top, 92)
+         }
++        .overlay(alignment: .top) {
++            WeatherAlertBanner(isVisible: shouldShowSevereAlertBanner)
++                .padding(.top, 128)
++        }
+         .animation(.easeInOut(duration: 0.18), value: isLoadingWeather)
++        .animation(.easeInOut(duration: 0.18), value: shouldShowSevereAlertBanner)
+         .sheet(item: $activeSheet) { sheet in
+             presentedSheet(sheet)
+                 .presentationDetents(sheet.detents)
+@@ -86,6 +91,11 @@ struct ContentView: View {
+         .environment(\.atmosReduceTransparency, units.reduceTransparency)
+     }
+ 
++    private var shouldShowSevereAlertBanner: Bool {
++        guard units.alertsEnabled, let condition = report?.current.condition else { return false }
++        return condition == .thunderstorms || condition == .heavyRain
++    }
++
+     @ViewBuilder
+     private func presentedSheet(_ sheet: WeatherSheet) -> some View {
+         switch sheet {
+@@ -191,6 +201,30 @@ private struct WeatherLoadingScreen: View {
+     }
+ }
+ 
++private struct WeatherAlertBanner: View {
++    let isVisible: Bool
++
++    var body: some View {
++        HStack(spacing: 8) {
++            Image(systemName: "exclamationmark.triangle.fill")
++            Text("Severe weather alert")
++        }
++        .font(.system(size: 12, weight: .semibold))
++        .foregroundStyle(.white)
++        .padding(.horizontal, 12)
++        .padding(.vertical, 8)
++        .background(.black.opacity(isVisible ? 0.32 : 0), in: Capsule())
++        .opacity(isVisible ? 1 : 0)
++        .allowsHitTesting(false)
++        .accessibilityIdentifier("weather.alertBanner")
++        .onChange(of: isVisible) { _, new in
++            if new {
++                AppLog.app.notice("severe weather alert banner shown")
++            }
++        }
++    }
++}
++
+ private struct WeatherLoadingBanner: View {
+     let isLoading: Bool
+     let message: String?
+-- 
+2.50.1 (Apple Git-155)
+

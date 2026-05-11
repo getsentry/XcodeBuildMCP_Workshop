@@ -1,0 +1,35 @@
+From d6877e1f7308bfe494156b6037e6b2f12ded9ec9 Mon Sep 17 00:00:00 2001
+From: Cameron Cooke <cameron.cooke@sentry.io>
+Date: Mon, 11 May 2026 12:10:29 +0100
+Subject: [PATCH] Remove obsolete project config
+
+The .xcodebuildmcp/config.yaml under app/ wasn't being picked up
+by anything in the current toolchain. Dropping it.
+---
+ app/.xcodebuildmcp/config.yaml | 14 --------------
+ 1 file changed, 14 deletions(-)
+ delete mode 100644 app/.xcodebuildmcp/config.yaml
+
+diff --git a/app/.xcodebuildmcp/config.yaml b/app/.xcodebuildmcp/config.yaml
+deleted file mode 100644
+index 814fed8..0000000
+--- a/app/.xcodebuildmcp/config.yaml
++++ /dev/null
+@@ -1,14 +0,0 @@
+-schemaVersion: 1
+-enabledWorkflows:
+-  - simulator
+-  - ui-automation
+-  - debugging
+-  - logging
+-sessionDefaults:
+-  projectPath: ./Weather.xcodeproj
+-  scheme: Weather
+-  configuration: Debug
+-  simulatorName: iPhone 17 Pro
+-  simulatorPlatform: iOS Simulator
+-  useLatestOS: true
+-  bundleId: com.sentry.weather.Weather
+-- 
+2.50.1 (Apple Git-155)
+

@@ -1,0 +1,14 @@
+schemaVersion: 1
+enabledWorkflows:
+  - simulator
+  - ui-automation
+  - debugging
+  - logging
+sessionDefaults:
+  projectPath: ./Weather.xcodeproj
+  scheme: Weather
+  configuration: Debug
+  simulatorName: iPhone 17 Pro
+  simulatorPlatform: iOS Simulator
+  useLatestOS: true
+  bundleId: com.sentry.weather.Weather

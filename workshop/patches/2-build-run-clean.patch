@@ -1,0 +1,26 @@
+From 4babf729f391ad66a6d2a6a3fcbd94873c1c1da8 Mon Sep 17 00:00:00 2001
+From: Cameron Cooke <cameron.cooke@sentry.io>
+Date: Mon, 11 May 2026 11:49:28 +0100
+Subject: [PATCH] wip: SunMiniCard typography tweak
+
+Adjust the primary-time Text in SunMiniCard. In-progress.
+---
+ app/Weather/Views/Sections/SunMiniCard.swift | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/app/Weather/Views/Sections/SunMiniCard.swift b/app/Weather/Views/Sections/SunMiniCard.swift
+index 0783c1c..73e64a6 100644
+--- a/app/Weather/Views/Sections/SunMiniCard.swift
++++ b/app/Weather/Views/Sections/SunMiniCard.swift
+@@ -11,7 +11,7 @@ struct SunMiniCard: View {
+                     .tracking(1.3)
+                     .foregroundStyle(current.theme.foregroundMuted)
+ 
+-                Text(primaryTime)
++                Text(primaryTime
+                     .font(.system(size: 22, weight: .light))
+                     .tracking(-0.5)
+                     .monospacedDigit()
+-- 
+2.50.1 (Apple Git-155)
+
