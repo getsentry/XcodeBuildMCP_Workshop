@@ -26,16 +26,8 @@ BACKEND_CONTROL="${SCRIPT_DIR}/backend-control.sh"
 
 copy_to_clipboard="false"
 
-# Acts where the agent may boot the app and hit the real backend. Act 1
-# doesn't run the app; Act 2's prompt pins --mock-weather-api so it's
-# unnecessary there. For 3, 4, 5 we make sure the backend is up so a default
-# (non-mock) launch succeeds.
-backend_needed_for() {
-    case "$1" in
-        act3|act4|act5) return 0 ;;
-        *)              return 1 ;;
-    esac
-}
+# Stages that hardcode production weather data need the backend. Mock stages
+# run from in-app fixture data, so the switcher leaves the backend alone there.
 
 # Act 1 demos installing XcodeBuildMCP live (writing .mcp.json + the project
 # config), so the file must be absent. Every other act assumes the MCP server
@@ -105,7 +97,7 @@ arrow_pick() {
         IFS='' read -rsn1 key
         case "$key" in
             $'\x1b')
-                read -rsn2 -t 0.01 key 2>/dev/null || true
+                read -rsn2 -t 1 key 2>/dev/null || true
                 case "$key" in
                     '[A') sel=$(( (sel - 1 + n) % n )) ;;
                     '[B') sel=$(( (sel + 1) % n )) ;;
@@ -130,7 +122,7 @@ EOF
             ;;
         act2)
             cat <<'EOF'
-Build and run the Weather app on the iPhone 17 Pro simulator with --mock-weather-api.
+Build and run the Weather app on the iPhone 17 Pro simulator.
 EOF
             ;;
         act3)
@@ -161,27 +153,28 @@ EOF
     esac
 }
 
-# Resolve a short form / branch name into $branch and $prompt_kind globals.
+# Resolve a short form / branch name into $branch, $prompt_kind, and
+# $data_source globals.
 resolve_branch() {
     case "$1" in
-        1)            branch="stage/1-setup-start";       prompt_kind="act1" ;;
-        1-done)       branch="main";                      prompt_kind="reference" ;;
-        2)            branch="stage/2-build-run-clean";   prompt_kind="act2" ;;
-        2-done)       branch="main";                      prompt_kind="reference" ;;
-        3)            branch="stage/3-feature-start";     prompt_kind="act3" ;;
-        3-done)       branch="stage/3-feature-done";      prompt_kind="reference" ;;
-        4)            branch="stage/4-bug-planted";       prompt_kind="act4" ;;
-        4-done)       branch="stage/4-bug-fixed";         prompt_kind="reference" ;;
-        5|canonical)  branch="stage/5-canonical";         prompt_kind="act5" ;;
-        main)                      branch="$1"; prompt_kind="reference" ;;
-        stage/1-setup-start)       branch="$1"; prompt_kind="act1" ;;
-        stage/2-build-run-clean)   branch="$1"; prompt_kind="act2" ;;
-        stage/3-feature-start)     branch="$1"; prompt_kind="act3" ;;
-        stage/3-feature-done)      branch="$1"; prompt_kind="reference" ;;
-        stage/4-bug-planted)       branch="$1"; prompt_kind="act4" ;;
-        stage/4-bug-fixed)         branch="$1"; prompt_kind="reference" ;;
-        stage/5-canonical)         branch="$1"; prompt_kind="act5" ;;
-        stage/*)      branch="$1"; prompt_kind="unknown" ;;
+        1)            branch="stage/1-setup-start";       prompt_kind="act1";      data_source="mock" ;;
+        1-done)       branch="main";                      prompt_kind="reference"; data_source="mock" ;;
+        2)            branch="stage/2-build-run-clean";   prompt_kind="act2";      data_source="mock" ;;
+        2-done)       branch="main";                      prompt_kind="reference"; data_source="mock" ;;
+        3)            branch="stage/3-feature-start";     prompt_kind="act3";      data_source="mock" ;;
+        3-done)       branch="stage/3-feature-done";      prompt_kind="reference"; data_source="mock" ;;
+        4)            branch="stage/4-bug-planted";       prompt_kind="act4";      data_source="production" ;;
+        4-done)       branch="stage/4-bug-fixed";         prompt_kind="reference"; data_source="production" ;;
+        5|canonical)  branch="stage/5-canonical";         prompt_kind="act5";      data_source="production" ;;
+        main)                      branch="$1"; prompt_kind="reference"; data_source="mock" ;;
+        stage/1-setup-start)       branch="$1"; prompt_kind="act1";      data_source="mock" ;;
+        stage/2-build-run-clean)   branch="$1"; prompt_kind="act2";      data_source="mock" ;;
+        stage/3-feature-start)     branch="$1"; prompt_kind="act3";      data_source="mock" ;;
+        stage/3-feature-done)      branch="$1"; prompt_kind="reference"; data_source="mock" ;;
+        stage/4-bug-planted)       branch="$1"; prompt_kind="act4";      data_source="production" ;;
+        stage/4-bug-fixed)         branch="$1"; prompt_kind="reference"; data_source="production" ;;
+        stage/5-canonical)         branch="$1"; prompt_kind="act5";      data_source="production" ;;
+        stage/*)      branch="$1"; prompt_kind="unknown"; data_source="unknown" ;;
         *)
             echo "error: unknown stage '$1'" >&2
             return 1 ;;
@@ -189,7 +182,7 @@ resolve_branch() {
 }
 
 # Switch the working tree to $branch, wipe DerivedData, manage the backend
-# based on $prompt_kind, print the prompt, optionally copy to clipboard.
+# based on $data_source, print the prompt, optionally copy to clipboard.
 do_act() {
     if ! git rev-parse --verify "$branch" >/dev/null 2>&1; then
         echo "error: branch '$branch' does not exist." >&2
@@ -240,13 +233,15 @@ do_act() {
         echo ".mcp.json written for XcodeBuildMCP (xcodebuildmcp mcp)."
     fi
 
-    # Manage the backend. Acts 4 and 5 hit the real network; mock-only acts
-    # (1, 2, 3) don't, so we don't bother starting it for those.
-    if backend_needed_for "$prompt_kind"; then
-        echo "act needs backend — ensuring it's up."
+    # Manage the backend. Production-data stages need the local API; mock-data
+    # stages don't, so we don't bother starting it for those.
+    if [[ "$data_source" == "production" ]]; then
+        echo "stage uses production weather data — ensuring backend is up."
         "${BACKEND_CONTROL}" ensure
+    elif [[ "$data_source" == "mock" ]]; then
+        echo "stage uses mock weather data — backend not required (leaving any running instance alone)."
     else
-        echo "act runs against mock — backend not required (leaving any running instance alone)."
+        echo "stage data source unknown — backend not required (leaving any running instance alone)."
     fi
 
     echo "done. on $branch with cold DerivedData."

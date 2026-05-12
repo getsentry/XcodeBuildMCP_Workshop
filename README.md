@@ -23,8 +23,8 @@ cd app && claude                     # launch Claude Code rooted in app/
 Launching Claude from `app/` is the boundary that keeps `backend/` and
 `workshop/` invisible to the iOS-side agent. `app/.mcp.json` (managed by the
 switch script) registers XcodeBuildMCP; `app/.xcodebuildmcp/config.yaml`
-provides session defaults. Acts that hit the real network (3/4/5) get the
-backend started automatically by `switch-stage.sh`.
+provides session defaults. Production-data stages (4/5) get the backend
+started automatically by `switch-stage.sh`.
 
 ## Backend
 
@@ -47,15 +47,14 @@ cd app
 xcodebuildmcp simulator build-and-run
 ```
 
-### Mock mode
+### Weather data source defaults
 
-Relaunch with mock data (no backend required):
+The app does not support runtime data-source selection via launch arguments.
 
-```bash
-xcodebuildmcp simulator launch-app \
-  --bundle-id com.sentry.weather.Weather \
-  --args=--mock-weather-api
-```
+- `main` and workshop stages 1/2/3 default to mock weather data.
+- Workshop stages 4/5 default to the production backend at `http://localhost:3001/v1`.
+
+Start the backend before running production-data stages.
 
 ### Tests
 
@@ -63,7 +62,7 @@ xcodebuildmcp simulator launch-app \
 xcodebuildmcp simulator test
 ```
 
-UI tests inject `--mock-weather-api` so they do not depend on the backend.
+UI tests inherit the branch's hardcoded weather data default. On production-data stages, ensure the backend is running.
 
 ## API endpoints
 

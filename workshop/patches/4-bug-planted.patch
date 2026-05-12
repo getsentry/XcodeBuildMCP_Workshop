@@ -8,7 +8,8 @@ The upstream guarantees the value is in range, and WindDirection's
 invariant covers the rest. Removes a few lines of dead defense.
 ---
  app/Weather/Services/WeatherClientDTOs.swift | 8 +-------
- 1 file changed, 1 insertion(+), 7 deletions(-)
+ app/Weather/WeatherApp.swift                  | 4 ++--
+ 2 files changed, 3 insertions(+), 9 deletions(-)
 
 diff --git a/app/Weather/Services/WeatherClientDTOs.swift b/app/Weather/Services/WeatherClientDTOs.swift
 index 07a6f3d..ad63e3e 100644
@@ -36,6 +37,21 @@ index 07a6f3d..ad63e3e 100644
              humidity: dto.humidity,
              visibilityKilometers: dto.visibilityKilometers,
              pressureMillibars: dto.pressureMillibars,
+diff --git a/app/Weather/WeatherApp.swift b/app/Weather/WeatherApp.swift
+--- a/app/Weather/WeatherApp.swift
++++ b/app/Weather/WeatherApp.swift
+@@ -12,8 +12,8 @@ import SwiftUI
+ struct WeatherApp: App {
+     private let weatherService: WeatherService
+ 
+     init() {
+-        weatherService = .mock
+-        AppLog.app.notice("launch service=mock")
++        weatherService = .production
++        AppLog.app.notice("launch service=production")
+     }
+ 
+     var body: some Scene {
 -- 
 2.50.1 (Apple Git-155)
 

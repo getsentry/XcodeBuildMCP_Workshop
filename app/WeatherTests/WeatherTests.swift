@@ -207,7 +207,7 @@ struct WeatherTests {
             uvIndex: 1,
             uvCategory: .low,
             windKph: 12,
-            windDirectionDegrees: 0,
+            windDirectionDegrees: 360,
             humidity: 50,
             visibilityKilometers: 10,
             pressureMillibars: 1_013,

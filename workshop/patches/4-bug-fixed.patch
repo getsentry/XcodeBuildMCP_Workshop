@@ -1,0 +1,29 @@
+From 831ff0431880ab907c990d67b98a1369dd6b3826 Mon Sep 17 00:00:00 2001
+From: Cameron Cooke <cameron.cooke@sentry.io>
+Date: Tue, 12 May 2026 11:45:00 +0100
+Subject: [PATCH] Use production weather data for stage 4 reference
+
+Stage 4's reference branch keeps the fixed DTO mapper from main but still
+uses production backend data so it matches the planted runtime-debugging stage.
+---
+ app/Weather/WeatherApp.swift | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/app/Weather/WeatherApp.swift b/app/Weather/WeatherApp.swift
+--- a/app/Weather/WeatherApp.swift
++++ b/app/Weather/WeatherApp.swift
+@@ -12,8 +12,8 @@ import SwiftUI
+ struct WeatherApp: App {
+     private let weatherService: WeatherService
+ 
+     init() {
+-        weatherService = .mock
+-        AppLog.app.notice("launch service=mock")
++        weatherService = .production
++        AppLog.app.notice("launch service=production")
+     }
+ 
+     var body: some Scene {
+-- 
+2.50.1 (Apple Git-155)
+

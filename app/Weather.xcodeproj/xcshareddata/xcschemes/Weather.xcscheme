@@ -73,12 +73,6 @@
             ReferencedContainer = "container:Weather.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "--mock-weather-api"
-            isEnabled = "YES">
-         </CommandLineArgument>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

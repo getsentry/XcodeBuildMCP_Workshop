@@ -49,10 +49,7 @@ for stage in "${stages[@]}"; do
     git switch "${ANCHOR}"
     git branch -D "${branch}" 2>/dev/null || true
     if [[ ! -f "${patch}" ]]; then
-        # 4-bug-fixed is intentionally byte-identical to main (the fix lives on
-        # main already), so format-patch yields nothing. Create the branch
-        # anyway so switch-stage.sh's 4-done lookup resolves cleanly.
-        echo "=== creating ${branch} = ${ANCHOR} (no patch — fix already on main) ==="
+        echo "=== creating ${branch} = ${ANCHOR} (no patch) ==="
         git switch -c "${branch}" "${ANCHOR}"
         continue
     fi

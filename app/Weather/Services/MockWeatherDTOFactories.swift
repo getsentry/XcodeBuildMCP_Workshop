@@ -105,7 +105,7 @@ extension CurrentWeatherDTO {
                 id: "weather-current-loc-us-co-aspen",
                 temperatureC: -4, highC: -2, lowC: -10, feelsLikeC: -8, dewPointC: -7, condition: .lightSnow,
                 solarProgress: .daylight(0.50), sunrise: clock(7, 14), sunset: clock(17, 38), airQualityIndex: 18, airQualityCategory: .good,
-                uvIndex: 2, uvCategory: .low, windKph: 10, windDirectionDegrees: 0, humidity: 78,
+                uvIndex: 2, uvCategory: .low, windKph: 10, windDirectionDegrees: 360, humidity: 78,
                 visibilityKilometers: 6.4, pressureMillibars: 1022, pressureTrend: .steady, precipChance: 65
             )
         case .night:

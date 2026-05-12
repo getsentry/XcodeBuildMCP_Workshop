@@ -233,7 +233,6 @@ index ca85cbf..47956ab 100644
      let isLoading: Bool
      let message: String?
 diff --git a/app/Weather/WeatherApp.swift b/app/Weather/WeatherApp.swift
-index 9c619e4..23a9857 100644
 --- a/app/Weather/WeatherApp.swift
 +++ b/app/Weather/WeatherApp.swift
 @@ -6,6 +6,7 @@
@@ -263,9 +262,11 @@ index 9c619e4..23a9857 100644
 +        #endif
 +        SentrySDK.start(options: options)
 +
-         let useMock = ProcessInfo.processInfo.arguments.contains("--mock-weather-api")
-         weatherService = AppWeatherServiceFactory.makeService()
-         AppLog.app.notice("launch service=\(useMock ? "mock" : "production", privacy: .public)")
+-        weatherService = .mock
+-        AppLog.app.notice("launch service=mock")
++        weatherService = .production
++        AppLog.app.notice("launch service=production")
+     }
 diff --git a/backend/instrument.mjs b/backend/instrument.mjs
 new file mode 100644
 index 0000000..eb3c3ef

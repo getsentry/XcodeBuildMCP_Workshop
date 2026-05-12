@@ -49,9 +49,10 @@ Branch: `stage/2-build-run-clean`
 Run: `./workshop/switch-stage.sh 2`
 
 ```
-Build and run the Weather app on the iPhone 17 Pro simulator with --mock-weather-api.
+Build and run the Weather app on the iPhone 17 Pro simulator.
 ```
 
+The app defaults to mock weather data in this stage, so no backend is required.
 The build will fail with a Swift compile error. The agent has to read the
 diagnostic, locate the file, fix it, and rebuild — implicit in "build and run".
 No "there's a bug somewhere" hint.
@@ -67,8 +68,9 @@ Run: `./workshop/switch-stage.sh 3`
 The "Severe weather alerts" toggle in Settings doesn't seem to do anything. Make it work — when alerts are enabled and the current condition is severe (thunderstorms or heavy rain), the user should see an alert banner near the top of the screen.
 ```
 
-Frames the work as a user complaint plus a feature description. The agent has
-to discover that `alertsEnabled` is currently bound but unconsumed, design the
+Frames the work as a user complaint plus a feature description. This stage uses
+app-default mock weather data, so no backend is required. The agent has to
+discover that `alertsEnabled` is currently bound but unconsumed, design the
 banner component (matching the existing `WeatherLoadingBanner` visual style is
 on them to spot), thread the state through, and verify by toggling in the
 running simulator.
@@ -87,11 +89,11 @@ Run: `./workshop/switch-stage.sh 4`
 Attach the debugger to the Weather app, then browse each saved location and confirm the forecast loads cleanly.
 ```
 
-The agent taps through saved locations one by one. SF/Portland/Aspen/New
-Orleans/Tokyo/Lisbon load fine. **The crash fires the moment Reykjavík is
-selected**: the API uses `0°` to represent due north (standard
-meteorological convention), `WindDirection.init` asserts `degrees >= 1 &&
-degrees <= 360`, and the precondition trap fires.
+This stage uses production backend data. The agent taps through saved locations
+one by one. SF/Portland/Aspen/New Orleans/Tokyo/Lisbon load fine. **The crash
+fires the moment Reykjavík is selected**: the API uses `0°` to represent due
+north (standard meteorological convention), `WindDirection.init` asserts
+`degrees >= 1 && degrees <= 360`, and the precondition trap fires.
 
 The bug is **not** discoverable from iOS-side code review alone — the
 model invariant looks defensible in isolation. The agent has to attach
@@ -111,9 +113,9 @@ If the agent can't reproduce within ~90s, nudge gently:
 Try Reykjavík specifically.
 ```
 
-If still stuck, `stage/4-bug-fixed` is the reference solution (identical
-to `main`). The fix re-introduces a guard `(0...360).contains(...)` and
-coerces `0 → 360` before constructing `WindDirection`, preserving the
+If still stuck, `stage/4-bug-fixed` is the reference solution. It keeps
+production backend data and re-introduces a guard `(0...360).contains(...)`,
+then coerces `0 → 360` before constructing `WindDirection`, preserving the
 model's `1...360` invariant.
 
 > A sharper agent may instead propose modelling "calm" as a separate
@@ -130,9 +132,8 @@ model's `1...360` invariant.
 Branch: `stage/5-canonical`
 Run: `./workshop/switch-stage.sh 5`
 
-The canonical app: `main` + the Act 3 alerts banner. Act 4's "fix" is identical
-to main, so it adds no net diff — the canonical is just the working app with the
-new feature folded in. All seven saved locations load without crashing.
+The canonical app: `main` + the Act 3 alerts banner + production backend data.
+All saved locations load without crashing.
 
 The canonical branch is intentionally clean of any Sentry wiring. Installing
 the SDK, pointing the production `WeatherAPIConfiguration.baseURL` at the
