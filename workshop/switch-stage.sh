@@ -122,17 +122,17 @@ EOF
             ;;
         act2)
             cat <<'EOF'
-Build and run the Weather app on the iPhone 17 Pro simulator.
+Build and run the Weather app.
 EOF
             ;;
         act3)
             cat <<'EOF'
-The "Severe weather alerts" toggle in Settings doesn't seem to do anything. Make it work — when alerts are enabled and the current condition is severe (thunderstorms or heavy rain), the user should see an alert banner near the top of the screen.
+The "Severe weather alerts" toggle in Settings doesn't seem to do anything. Make it work — when alerts are enabled and the current condition is severe (thunderstorms or heavy rain), the user should see an alert banner near the top of the screen. Make sure the alert banner is above ther existing header content.
 EOF
             ;;
         act4)
             cat <<'EOF'
-Attach the debugger to the Weather app, then browse each saved location and confirm the forecast loads cleanly.
+Attach the debugger to the Weather app, then browse each saved location and confirm the forecast loads from the API cleanly. If you hit an issue report back the issue with suggested fix.
 EOF
             ;;
         act5)
@@ -147,7 +147,7 @@ EOF
             ;;
         unknown)
             cat <<'EOF'
-(unknown branch — see PROMPTS.md for the canonical prompts)
+(unknown branch)
 EOF
             ;;
     esac
