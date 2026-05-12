@@ -1,16 +1,177 @@
-From 2568f155510060cfaf554ee53e0afb4a28fed3f6 Mon Sep 17 00:00:00 2001
-From: Cameron Cooke <cameron.cooke@sentry.io>
-Date: Mon, 11 May 2026 11:50:41 +0100
-Subject: [PATCH] Add severe weather alert banner
+From 021e6212200fba2325f4a99f2323bcf06cd698fd Mon Sep 17 00:00:00 2001
+From: Sergiy Dybskiy <sergiy.dybskiy@sentry.io>
+Date: Mon, 11 May 2026 20:58:11 -0400
+Subject: [PATCH] Add severe weather alert banner and expand default locations
 
 Show a banner near the top of the main screen when alerts are
 enabled and the current condition is thunderstorms or heavy rain.
-Styled to match WeatherLoadingBanner; accessibility identifier
-'weather.alertBanner'.
+Add Chicago to default locations with windy conditions data.
+Wire up error monitoring for both app and API server.
 ---
- app/Weather/ContentView.swift | 34 ++++++++++++++++++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ app/Weather.xcodeproj/project.pbxproj         |   64 ++
+ .../xcshareddata/swiftpm/Package.resolved     |   15 +
+ app/Weather/ContentView.swift                 |   34 +
+ app/Weather/WeatherApp.swift                  |   16 +
+ backend/instrument.mjs                        |   18 +
+ backend/package-lock.json                     | 1007 ++++++++++++++++-
+ backend/package.json                          |   15 +-
+ backend/src/index.ts                          |  766 +++++++++++--
+ 8 files changed, 1804 insertions(+), 131 deletions(-)
+ create mode 100644 app/Weather.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+ create mode 100644 backend/instrument.mjs
 
+diff --git a/app/Weather.xcodeproj/project.pbxproj b/app/Weather.xcodeproj/project.pbxproj
+index 6d0c543..0eb15cc 100644
+--- a/app/Weather.xcodeproj/project.pbxproj
++++ b/app/Weather.xcodeproj/project.pbxproj
+@@ -85,6 +85,7 @@
+ 			isa = PBXFrameworksBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				390A95B436B14B82B808A3D6 /* Sentry in Frameworks */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+@@ -92,6 +93,7 @@
+ 			isa = PBXFrameworksBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				390A95B436B14B82B808A3D6 /* Sentry in Frameworks */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+@@ -99,6 +101,7 @@
+ 			isa = PBXFrameworksBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				390A95B436B14B82B808A3D6 /* Sentry in Frameworks */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+@@ -135,6 +138,7 @@
+ 				8B92913D2FA3FCC300B2E371 /* Sources */,
+ 				8B92913E2FA3FCC300B2E371 /* Frameworks */,
+ 				8B92913F2FA3FCC300B2E371 /* Resources */,
++				AD3C5FB0524B47A2AE0A8A90 /* Upload Debug Symbols to Sentry */,
+ 			);
+ 			buildRules = (
+ 			);
+@@ -145,6 +149,7 @@
+ 			);
+ 			name = Weather;
+ 			packageProductDependencies = (
++				A645DA896A7A47FC8B4999FF /* Sentry */,
+ 			);
+ 			productName = Weather;
+ 			productReference = 8B9291412FA3FCC300B2E371 /* Weather.app */;
+@@ -237,6 +242,9 @@
+ 				8B92914D2FA3FCC400B2E371 /* WeatherTests */,
+ 				8B9291572FA3FCC400B2E371 /* WeatherUITests */,
+ 			);
++			packageReferences = (
++				7827C267A4ED4B368F3331E9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
++			);
+ 		};
+ /* End PBXProject section */
+ 
+@@ -451,6 +459,8 @@
+ 				SWIFT_VERSION = 5.0;
+ 				TARGETED_DEVICE_FAMILY = "1,2,7";
+ 				XROS_DEPLOYMENT_TARGET = 26.0;
++				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
++				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
+ 			};
+ 			name = Debug;
+ 		};
+@@ -485,6 +495,8 @@
+ 				SWIFT_VERSION = 5.0;
+ 				TARGETED_DEVICE_FAMILY = "1,2,7";
+ 				XROS_DEPLOYMENT_TARGET = 26.0;
++				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
++				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
+ 			};
+ 			name = Release;
+ 		};
+@@ -630,6 +642,58 @@
+ 			defaultConfigurationName = Release;
+ 		};
+ /* End XCConfigurationList section */
++
++/* Begin PBXShellScriptBuildPhase section */
++		AD3C5FB0524B47A2AE0A8A90 /* Upload Debug Symbols to Sentry */ = {
++			isa = PBXShellScriptBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			inputPaths = (
++				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
++			);
++			outputPaths = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++			shellPath = /bin/sh;
++			shellScript = "# This script is responsible for uploading debug symbols and source context for Sentry.
++if which sentry-cli >/dev/null; then
++  export SENTRY_ORG=sentry-developer-experience
++  export SENTRY_PROJECT=atmos-weather-ios
++  ERROR=$(sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" 2>&1 >/dev/null)
++  if [ ! $? -eq 0 ]; then
++    echo \"warning: sentry-cli - $ERROR\"
++  fi
++else
++  echo \"warning: sentry-cli not installed, download from https://github.com/getsentry/sentry-cli/releases\"
++fi
++";
++			name = "Upload Debug Symbols to Sentry";
++		};
++/* End PBXShellScriptBuildPhase section */
++
++/* Begin PBXBuildFile section */
++		390A95B436B14B82B808A3D6 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = A645DA896A7A47FC8B4999FF /* Sentry */; };
++/* End PBXBuildFile section */
++
++/* Begin XCRemoteSwiftPackageReference section */
++		7827C267A4ED4B368F3331E9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
++			isa = XCRemoteSwiftPackageReference;
++			repositoryURL = "https://github.com/getsentry/sentry-cocoa/";
++			requirement = {
++				kind = upToNextMajorVersion;
++				minimumVersion = 9.0.0;
++			};
++		};
++/* End XCRemoteSwiftPackageReference section */
++
++/* Begin XCSwiftPackageProductDependency section */
++		A645DA896A7A47FC8B4999FF /* Sentry */ = {
++			isa = XCSwiftPackageProductDependency;
++			package = 7827C267A4ED4B368F3331E9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
++			productName = Sentry;
++		};
++/* End XCSwiftPackageProductDependency section */
+ 	};
+ 	rootObject = 8B9291392FA3FCC300B2E371 /* Project object */;
+ }
+diff --git a/app/Weather.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved b/app/Weather.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+new file mode 100644
+index 0000000..81479ef
+--- /dev/null
++++ b/app/Weather.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+@@ -0,0 +1,15 @@
++{
++  "originHash" : "5fdfe48001ec9270f523296bb07696c525da68412b4311316766541057fcdc34",
++  "pins" : [
++    {
++      "identity" : "sentry-cocoa",
++      "kind" : "remoteSourceControl",
++      "location" : "https://github.com/getsentry/sentry-cocoa/",
++      "state" : {
++        "revision" : "64c9c5cc401aefde0eda46a9192b36082533a79d",
++        "version" : "9.13.0"
++      }
++    }
++  ],
++  "version" : 3
++}
 diff --git a/app/Weather/ContentView.swift b/app/Weather/ContentView.swift
 index ca85cbf..47956ab 100644
 --- a/app/Weather/ContentView.swift
@@ -71,6 +232,2048 @@ index ca85cbf..47956ab 100644
  private struct WeatherLoadingBanner: View {
      let isLoading: Bool
      let message: String?
+diff --git a/app/Weather/WeatherApp.swift b/app/Weather/WeatherApp.swift
+index 9c619e4..23a9857 100644
+--- a/app/Weather/WeatherApp.swift
++++ b/app/Weather/WeatherApp.swift
+@@ -6,6 +6,7 @@
+ //
+ 
+ import OSLog
++import Sentry
+ import SwiftUI
+ 
+ @main
+@@ -13,6 +14,21 @@ struct WeatherApp: App {
+     private let weatherService: WeatherService
+ 
+     init() {
++        let options = Options()
++        options.dsn = "https://cd90afa825f312071330f26be7b56b7a@o4509446862274560.ingest.us.sentry.io/4511354463846400"
++        options.tracesSampleRate = 1.0
++        options.sessionReplay.sessionSampleRate = 0.1
++        options.sessionReplay.onErrorSampleRate = 1.0
++        options.enableLogs = true
++        options.enableAutoPerformanceTracing = true
++        options.tracePropagationTargets = ["localhost"]
++        options.enableNetworkTracking = true
++        options.enableSwizzling = true
++        #if DEBUG
++        options.debug = true
++        #endif
++        SentrySDK.start(options: options)
++
+         let useMock = ProcessInfo.processInfo.arguments.contains("--mock-weather-api")
+         weatherService = AppWeatherServiceFactory.makeService()
+         AppLog.app.notice("launch service=\(useMock ? "mock" : "production", privacy: .public)")
+diff --git a/backend/instrument.mjs b/backend/instrument.mjs
+new file mode 100644
+index 0000000..eb3c3ef
+--- /dev/null
++++ b/backend/instrument.mjs
+@@ -0,0 +1,18 @@
++import * as Sentry from "@sentry/hono/node";
++import { nodeProfilingIntegration } from "@sentry/profiling-node";
++
++Sentry.init({
++  dsn: "https://11233245fa33723657dc716d14665105@o4509446862274560.ingest.us.sentry.io/4511355722858496",
++
++  sendDefaultPii: true,
++  debug: true,
++  integrations: [
++    nodeProfilingIntegration(),
++  ],
++
++  tracesSampleRate: 1.0,
++
++  profileSessionSampleRate: 1.0,
++
++  enableLogs: true,
++});
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index e134f94..bd321d6 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -9,6 +9,9 @@
+       "version": "1.0.0",
+       "dependencies": {
+         "@hono/node-server": "^1.14.1",
++        "@sentry/hono": "^10.52.0",
++        "@sentry/node": "^10.52.0",
++        "@sentry/profiling-node": "^10.52.0",
+         "hono": "^4.12.18"
+       },
+       "devDependencies": {
+@@ -458,6 +461,72 @@
+         "node": ">=18"
+       }
+     },
++    "node_modules/@fastify/otel": {
++      "version": "0.18.0",
++      "resolved": "https://registry.npmjs.org/@fastify/otel/-/otel-0.18.0.tgz",
++      "integrity": "sha512-3TASCATfw+ctICSb4ymrv7iCm0qJ0N9CarB+CZ7zIJ7KqNbwI5JjyDL1/sxoC0ccTO1Zyd1iQ+oqncPg5FJXaA==",
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fastify"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/fastify"
++        }
++      ],
++      "license": "MIT",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.212.0",
++        "@opentelemetry/semantic-conventions": "^1.28.0",
++        "minimatch": "^10.2.4"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.9.0"
++      }
++    },
++    "node_modules/@fastify/otel/node_modules/@opentelemetry/api-logs": {
++      "version": "0.212.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/api-logs/-/api-logs-0.212.0.tgz",
++      "integrity": "sha512-TEEVrLbNROUkYY51sBJGk7lO/OLjuepch8+hmpM6ffMJQ2z/KVCjdHuCFX6fJj8OkJP2zckPjrJzQtXU3IAsFg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      },
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
++    "node_modules/@fastify/otel/node_modules/@opentelemetry/instrumentation": {
++      "version": "0.212.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation/-/instrumentation-0.212.0.tgz",
++      "integrity": "sha512-IyXmpNnifNouMOe0I/gX7ENfv2ZCNdYTF0FpCsoBcpbIHzk81Ww9rQTYTnvghszCg7qGrIhNvWC8dhEifgX9Jg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/api-logs": "0.212.0",
++        "import-in-the-middle": "^2.0.6",
++        "require-in-the-middle": "^8.0.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@fastify/otel/node_modules/import-in-the-middle": {
++      "version": "2.0.6",
++      "resolved": "https://registry.npmjs.org/import-in-the-middle/-/import-in-the-middle-2.0.6.tgz",
++      "integrity": "sha512-3vZV3jX0XRFW3EJDTwzWoZa+RH1b8eTTx6YOCjglrLyPuepwoBti1k3L2dKwdCUrnVEfc5CuRuGstaC/uQJJaw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "acorn": "^8.15.0",
++        "acorn-import-attributes": "^1.9.5",
++        "cjs-module-lexer": "^2.2.0",
++        "module-details-from-path": "^1.0.4"
++      }
++    },
+     "node_modules/@hono/node-server": {
+       "version": "1.19.14",
+       "resolved": "https://registry.npmjs.org/@hono/node-server/-/node-server-1.19.14.tgz",
+@@ -470,16 +539,787 @@
+         "hono": "^4"
+       }
+     },
++    "node_modules/@opentelemetry/api": {
++      "version": "1.9.1",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/api/-/api-1.9.1.tgz",
++      "integrity": "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==",
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
++    "node_modules/@opentelemetry/api-logs": {
++      "version": "0.214.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/api-logs/-/api-logs-0.214.0.tgz",
++      "integrity": "sha512-40lSJeqYO8Uz2Yj7u94/SJWE/wONa7rmMKjI1ZcIjgf3MHNHv1OZUCrCETGuaRF62d5pQD1wKIW+L4lmSMTzZA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      },
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
++    "node_modules/@opentelemetry/core": {
++      "version": "2.7.1",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/core/-/core-2.7.1.tgz",
++      "integrity": "sha512-QAqIj32AtK6+pEVNG7EOVxHdE06RP+FM5qpiEJ4RtDcFIqKUZHYhl7/7UY5efhwmwNAg7j8QbJVBLxMerc0+gw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/semantic-conventions": "^1.29.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": ">=1.0.0 <1.10.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation": {
++      "version": "0.214.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation/-/instrumentation-0.214.0.tgz",
++      "integrity": "sha512-MHqEX5Dk59cqVah5LiARMACku7jXSVk9iVDWOea4x3cr7VfdByeDCURK6o1lntT1JS/Tsovw01UJrBhN3/uC5w==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/api-logs": "0.214.0",
++        "import-in-the-middle": "^3.0.0",
++        "require-in-the-middle": "^8.0.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-amqplib": {
++      "version": "0.61.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-amqplib/-/instrumentation-amqplib-0.61.0.tgz",
++      "integrity": "sha512-mCKoyTGfRNisge4br0NpOFSy2Z1NnEW8hbCJdUDdJFHrPqVzc4IIBPA/vX0U+LUcQqrQvJX+HMIU0dbDRe0i0Q==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-connect": {
++      "version": "0.57.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-connect/-/instrumentation-connect-0.57.0.tgz",
++      "integrity": "sha512-FMEBChnI4FLN5TE9DHwfH7QpNir1JzXno1uz/TAucVdLCyrG0jTrKIcNHt/i30A0M2AunNBCkcd8Ei26dIPKdg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.27.0",
++        "@types/connect": "3.4.38"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-dataloader": {
++      "version": "0.31.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-dataloader/-/instrumentation-dataloader-0.31.0.tgz",
++      "integrity": "sha512-f654tZFQXS5YeLDNb9KySrwtg7SnqZN119FauD7acBoTzuLduaiGTNz88ixcVSOOMGZ+EjJu/RFtx5klObC95g==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-fs": {
++      "version": "0.33.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-fs/-/instrumentation-fs-0.33.0.tgz",
++      "integrity": "sha512-sCZWXGalQ01wr3tAhSR9ucqFJ0phidpAle6/17HVjD6gN8FLmZMK/8sKxdXYHy3PbnlV1P4zeiSVFNKpbFMNLA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-generic-pool": {
++      "version": "0.57.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-generic-pool/-/instrumentation-generic-pool-0.57.0.tgz",
++      "integrity": "sha512-orhmlaK+ZIW9hKU+nHTbXrCSXZcH83AescTqmpamHRobRmYSQwRbD0a1odc0yAzuzOtxYiHiXAnpnIpaSSY7Ow==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-graphql": {
++      "version": "0.62.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-graphql/-/instrumentation-graphql-0.62.0.tgz",
++      "integrity": "sha512-3YNuLVPUxafXkH1jBAbGsKNsP3XVzcFDhCDCE3OqBwCwShlqQbLMRMFh1T/d5jaVZiGVmSsfof+ICKD2iOV8xg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-hapi": {
++      "version": "0.60.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-hapi/-/instrumentation-hapi-0.60.0.tgz",
++      "integrity": "sha512-aNljZKYrEa7obLAxd1bCEDxF7kzCLGXTuTJZ8lMR9rIVEjmuKBXN1gfqpm/OB//Zc2zP4iIve1jBp7sr3mQV6w==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.27.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-http": {
++      "version": "0.214.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-http/-/instrumentation-http-0.214.0.tgz",
++      "integrity": "sha512-FlkDhZDRjDJDcO2LcSCtjRpkal1NJ8y0fBqBhTvfAR3JSYY2jAIj1kSS5IjmEBt4c3aWv+u/lqLuoCDrrKCSKg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "2.6.1",
++        "@opentelemetry/instrumentation": "0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.29.0",
++        "forwarded-parse": "2.1.2"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-http/node_modules/@opentelemetry/core": {
++      "version": "2.6.1",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/core/-/core-2.6.1.tgz",
++      "integrity": "sha512-8xHSGWpJP9wBxgBpnqGL0R3PbdWQndL1Qp50qrg71+B28zK5OQmUgcDKLJgzyAAV38t4tOyLMGDD60LneR5W8g==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/semantic-conventions": "^1.29.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": ">=1.0.0 <1.10.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-kafkajs": {
++      "version": "0.23.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-kafkajs/-/instrumentation-kafkajs-0.23.0.tgz",
++      "integrity": "sha512-4K+nVo+zI+aDz0Z85SObwbdixIbzS9moIuKJaYsdlzcHYnKOPtB7ya8r8Ezivy/GVIBHiKJVq4tv+BEkgOMLaQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.30.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-knex": {
++      "version": "0.58.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-knex/-/instrumentation-knex-0.58.0.tgz",
++      "integrity": "sha512-Hc/o8fSsaWxZ8r1Yw4rNDLwTpUopTf4X32y4W6UhlHmW8Wizz8wfhgOKIelSeqFVTKBBPIDUOsQWuIMxBmu8Bw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.1"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-koa": {
++      "version": "0.62.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-koa/-/instrumentation-koa-0.62.0.tgz",
++      "integrity": "sha512-uVip0VuGUQXZ+vFxkKxAUNq8qNl+VFlyHDh/U6IQ8COOEDfbEchdaHnpFrMYF3psZRUuoSIgb7xOeXj00RdwDA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.36.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.9.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-lru-memoizer": {
++      "version": "0.58.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-lru-memoizer/-/instrumentation-lru-memoizer-0.58.0.tgz",
++      "integrity": "sha512-6grM3TdMyHzlGY1cUA+mwoPueB1F3dYKgKtZIH6jOFXqfHAByyLTc+6PFjGM9tKh52CFBJaDwodNlL/Td39z7Q==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-mongodb": {
++      "version": "0.67.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-mongodb/-/instrumentation-mongodb-0.67.0.tgz",
++      "integrity": "sha512-1WJp5N1lYfHq2IhECOTewFs5Tf2NfUOwQRqs/rZdXKTezArMlucxgzAaqcgp3A3YREXopXTpXHsxZTGHjNhMdQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-mongoose": {
++      "version": "0.60.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-mongoose/-/instrumentation-mongoose-0.60.0.tgz",
++      "integrity": "sha512-8BahAZpKsOoc+lrZGb7Ofn4g3z8qtp5IxDfvAVpKXsEheQN7ONMH5djT5ihy6yf8yyeQJGS0gXFfpEAEeEHqQg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-mysql": {
++      "version": "0.60.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-mysql/-/instrumentation-mysql-0.60.0.tgz",
++      "integrity": "sha512-08pO8GFPEIz2zquKDGteBZDNmwketdgH8hTe9rVYgW9kCJXq1Psj3wPQGx+VaX4ZJKCfPeoLMYup9+cxHvZyVQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.0",
++        "@types/mysql": "2.15.27"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-mysql2": {
++      "version": "0.60.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-mysql2/-/instrumentation-mysql2-0.60.0.tgz",
++      "integrity": "sha512-m/5d3bxQALllCzezYDk/6vajh0tj5OijMMvOZGr+qN1NMXm1dzMNwyJ0gNZW7Fo3YFRyj/jJMxIw+W7d525dlw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.0",
++        "@opentelemetry/sql-common": "^0.41.2"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-pg": {
++      "version": "0.66.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-pg/-/instrumentation-pg-0.66.0.tgz",
++      "integrity": "sha512-KxfLGXBb7k2ueaPJfq2GXBDXBly8P+SpR/4Mj410hhNgmQF3sCqwXvUBQxZQkDAmsdBAoenM+yV1LhtsMRamcA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.34.0",
++        "@opentelemetry/sql-common": "^0.41.2",
++        "@types/pg": "8.15.6",
++        "@types/pg-pool": "2.0.7"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/instrumentation-tedious": {
++      "version": "0.33.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation-tedious/-/instrumentation-tedious-0.33.0.tgz",
++      "integrity": "sha512-Q6WQwAD01MMTub31GlejoiFACYNw26J426wyjvU7by7fDIr2nZXNW4vhTGs7i7F0TnXBO3xN688g1tdUgYwJ5w==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/semantic-conventions": "^1.33.0",
++        "@types/tedious": "^4.0.14"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@opentelemetry/resources": {
++      "version": "2.7.1",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/resources/-/resources-2.7.1.tgz",
++      "integrity": "sha512-DeT6KKolmC4e/dRQvMQ/RwlnzhaqeiFOXY5ngoOPJ07GgVVKxZOg9EcrNZb5aTzUn+iCrJldAgOfQm1O/QfPAQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "2.7.1",
++        "@opentelemetry/semantic-conventions": "^1.29.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": ">=1.3.0 <1.10.0"
++      }
++    },
++    "node_modules/@opentelemetry/sdk-trace-base": {
++      "version": "2.7.1",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/sdk-trace-base/-/sdk-trace-base-2.7.1.tgz",
++      "integrity": "sha512-NAYIlsF8MPUsKqJMiDQJTMPOmlbawC1Iz/omMLygZ1C9am8fTKYjTaI+OZM+WTY3t3Glo0wnOg/6/pac6RGPPw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "2.7.1",
++        "@opentelemetry/resources": "2.7.1",
++        "@opentelemetry/semantic-conventions": "^1.29.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": ">=1.3.0 <1.10.0"
++      }
++    },
++    "node_modules/@opentelemetry/semantic-conventions": {
++      "version": "1.40.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/semantic-conventions/-/semantic-conventions-1.40.0.tgz",
++      "integrity": "sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw==",
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=14"
++      }
++    },
++    "node_modules/@opentelemetry/sql-common": {
++      "version": "0.41.2",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/sql-common/-/sql-common-0.41.2.tgz",
++      "integrity": "sha512-4mhWm3Z8z+i508zQJ7r6Xi7y4mmoJpdvH0fZPFRkWrdp5fq7hhZ2HhYokEOLkfqSMgPR4Z9EyB3DBkbKGOqZiQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/core": "^2.0.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.1.0"
++      }
++    },
++    "node_modules/@prisma/instrumentation": {
++      "version": "7.6.0",
++      "resolved": "https://registry.npmjs.org/@prisma/instrumentation/-/instrumentation-7.6.0.tgz",
++      "integrity": "sha512-ZPW2gRiwpPzEfgeZgaekhqXrbW+Y2RJKHVqUmlhZhKzRNCcvR6DykzylDrynpArKKRQtLxoZy36fK7U0p3pdgQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/instrumentation": "^0.207.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.8"
++      }
++    },
++    "node_modules/@prisma/instrumentation/node_modules/@opentelemetry/api-logs": {
++      "version": "0.207.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/api-logs/-/api-logs-0.207.0.tgz",
++      "integrity": "sha512-lAb0jQRVyleQQGiuuvCOTDVspc14nx6XJjP4FspJ1sNARo3Regq4ZZbrc3rN4b1TYSuUCvgH+UXUPug4SLOqEQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      },
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
++    "node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation": {
++      "version": "0.207.0",
++      "resolved": "https://registry.npmjs.org/@opentelemetry/instrumentation/-/instrumentation-0.207.0.tgz",
++      "integrity": "sha512-y6eeli9+TLKnznrR8AZlQMSJT7wILpXH+6EYq5Vf/4Ao+huI7EedxQHwRgVUOMLFbe7VFDvHJrX9/f4lcwnJsA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@opentelemetry/api-logs": "0.207.0",
++        "import-in-the-middle": "^2.0.0",
++        "require-in-the-middle": "^8.0.0"
++      },
++      "engines": {
++        "node": "^18.19.0 || >=20.6.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.3.0"
++      }
++    },
++    "node_modules/@prisma/instrumentation/node_modules/import-in-the-middle": {
++      "version": "2.0.6",
++      "resolved": "https://registry.npmjs.org/import-in-the-middle/-/import-in-the-middle-2.0.6.tgz",
++      "integrity": "sha512-3vZV3jX0XRFW3EJDTwzWoZa+RH1b8eTTx6YOCjglrLyPuepwoBti1k3L2dKwdCUrnVEfc5CuRuGstaC/uQJJaw==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "acorn": "^8.15.0",
++        "acorn-import-attributes": "^1.9.5",
++        "cjs-module-lexer": "^2.2.0",
++        "module-details-from-path": "^1.0.4"
++      }
++    },
++    "node_modules/@sentry-internal/node-cpu-profiler": {
++      "version": "2.4.0",
++      "resolved": "https://registry.npmjs.org/@sentry-internal/node-cpu-profiler/-/node-cpu-profiler-2.4.0.tgz",
++      "integrity": "sha512-zMrbqkd05LS1Ibt+js4R1aMmjdAO0yi9xiywWeulYs/bxN8P5qq20QHYleI76MorsocvYJAFo9GkYfzyzMd6Og==",
++      "hasInstallScript": true,
++      "license": "MIT",
++      "dependencies": {
++        "detect-libc": "^2.0.3",
++        "node-abi": "^3.73.0"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/@sentry/core": {
++      "version": "10.52.0",
++      "resolved": "https://registry.npmjs.org/@sentry/core/-/core-10.52.0.tgz",
++      "integrity": "sha512-VA/kAqLhkMnRWY2RXdBLyTemR9D4m7MVRy/gyapoq9yvllVPx9WXbvKgnMP2LQp7mFgT/oLFvw58aQKaYTGn3A==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/@sentry/hono": {
++      "version": "10.52.0",
++      "resolved": "https://registry.npmjs.org/@sentry/hono/-/hono-10.52.0.tgz",
++      "integrity": "sha512-LkVUbYOTqqkieo1iupyVOEJ0CEsdx00gAxA6zSpVNegA19SO3jdEzhnSA6F8VlkxO2wGwfpjihIfERcweELeIQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@opentelemetry/api": "^1.9.1",
++        "@sentry/core": "10.52.0"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "peerDependencies": {
++        "@cloudflare/workers-types": "^4.x",
++        "@sentry/bun": "10.52.0",
++        "@sentry/cloudflare": "10.52.0",
++        "@sentry/node": "10.52.0",
++        "hono": "^4.x"
++      },
++      "peerDependenciesMeta": {
++        "@cloudflare/workers-types": {
++          "optional": true
++        },
++        "@sentry/bun": {
++          "optional": true
++        },
++        "@sentry/cloudflare": {
++          "optional": true
++        },
++        "@sentry/node": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@sentry/node": {
++      "version": "10.52.0",
++      "resolved": "https://registry.npmjs.org/@sentry/node/-/node-10.52.0.tgz",
++      "integrity": "sha512-9+p3KJUk3rHO1HOEZuSknP2RgKCJZONDm4HWgkVDtVBtocb66KLtVlMjc59d2/bWP7tM3wc877tpG30quFfU9g==",
++      "license": "MIT",
++      "dependencies": {
++        "@fastify/otel": "0.18.0",
++        "@opentelemetry/api": "^1.9.1",
++        "@opentelemetry/core": "^2.6.1",
++        "@opentelemetry/instrumentation": "^0.214.0",
++        "@opentelemetry/instrumentation-amqplib": "0.61.0",
++        "@opentelemetry/instrumentation-connect": "0.57.0",
++        "@opentelemetry/instrumentation-dataloader": "0.31.0",
++        "@opentelemetry/instrumentation-fs": "0.33.0",
++        "@opentelemetry/instrumentation-generic-pool": "0.57.0",
++        "@opentelemetry/instrumentation-graphql": "0.62.0",
++        "@opentelemetry/instrumentation-hapi": "0.60.0",
++        "@opentelemetry/instrumentation-http": "0.214.0",
++        "@opentelemetry/instrumentation-kafkajs": "0.23.0",
++        "@opentelemetry/instrumentation-knex": "0.58.0",
++        "@opentelemetry/instrumentation-koa": "0.62.0",
++        "@opentelemetry/instrumentation-lru-memoizer": "0.58.0",
++        "@opentelemetry/instrumentation-mongodb": "0.67.0",
++        "@opentelemetry/instrumentation-mongoose": "0.60.0",
++        "@opentelemetry/instrumentation-mysql": "0.60.0",
++        "@opentelemetry/instrumentation-mysql2": "0.60.0",
++        "@opentelemetry/instrumentation-pg": "0.66.0",
++        "@opentelemetry/instrumentation-tedious": "0.33.0",
++        "@opentelemetry/sdk-trace-base": "^2.6.1",
++        "@opentelemetry/semantic-conventions": "^1.40.0",
++        "@prisma/instrumentation": "7.6.0",
++        "@sentry/core": "10.52.0",
++        "@sentry/node-core": "10.52.0",
++        "@sentry/opentelemetry": "10.52.0",
++        "import-in-the-middle": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/@sentry/node-core": {
++      "version": "10.52.0",
++      "resolved": "https://registry.npmjs.org/@sentry/node-core/-/node-core-10.52.0.tgz",
++      "integrity": "sha512-IG7MBtLRPQ2LuU+kbD14AFZroZgAeUmJQTP1FI/F8n56O31+p+9R703LuBTpvZr6sm+eRYDMWcGYYkfLHRVjwg==",
++      "license": "MIT",
++      "dependencies": {
++        "@sentry/core": "10.52.0",
++        "@sentry/opentelemetry": "10.52.0",
++        "import-in-the-middle": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.9.0",
++        "@opentelemetry/core": "^1.30.1 || ^2.1.0",
++        "@opentelemetry/exporter-trace-otlp-http": ">=0.57.0 <1",
++        "@opentelemetry/instrumentation": ">=0.57.1 <1",
++        "@opentelemetry/sdk-trace-base": "^1.30.1 || ^2.1.0",
++        "@opentelemetry/semantic-conventions": "^1.39.0"
++      },
++      "peerDependenciesMeta": {
++        "@opentelemetry/api": {
++          "optional": true
++        },
++        "@opentelemetry/core": {
++          "optional": true
++        },
++        "@opentelemetry/exporter-trace-otlp-http": {
++          "optional": true
++        },
++        "@opentelemetry/instrumentation": {
++          "optional": true
++        },
++        "@opentelemetry/sdk-trace-base": {
++          "optional": true
++        },
++        "@opentelemetry/semantic-conventions": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@sentry/opentelemetry": {
++      "version": "10.52.0",
++      "resolved": "https://registry.npmjs.org/@sentry/opentelemetry/-/opentelemetry-10.52.0.tgz",
++      "integrity": "sha512-Sc7StsvC0bwhMcgDfTRWUIexO5cNzzKUurvUwtpgQUnxO7AzexU3lkY3yHYDsCbWYAEQMXAgQYQtbcqoh+Ie7g==",
++      "license": "MIT",
++      "dependencies": {
++        "@sentry/core": "10.52.0"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": "^1.9.0",
++        "@opentelemetry/core": "^1.30.1 || ^2.1.0",
++        "@opentelemetry/sdk-trace-base": "^1.30.1 || ^2.1.0",
++        "@opentelemetry/semantic-conventions": "^1.39.0"
++      }
++    },
++    "node_modules/@sentry/profiling-node": {
++      "version": "10.52.0",
++      "resolved": "https://registry.npmjs.org/@sentry/profiling-node/-/profiling-node-10.52.0.tgz",
++      "integrity": "sha512-1vTrELjKsRB0O/1WIrbj5zjChKwYSJ1rHU/4ZrCQPeMioJaqAJP2Hzy81TS6RVR78pXswQj+z2+PF4uOjb9Mlg==",
++      "license": "MIT",
++      "dependencies": {
++        "@sentry-internal/node-cpu-profiler": "^2.2.0",
++        "@sentry/core": "10.52.0",
++        "@sentry/node": "10.52.0"
++      },
++      "bin": {
++        "sentry-prune-profiler-binaries": "scripts/prune-profiler-binaries.js"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/@types/connect": {
++      "version": "3.4.38",
++      "resolved": "https://registry.npmjs.org/@types/connect/-/connect-3.4.38.tgz",
++      "integrity": "sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/node": "*"
++      }
++    },
++    "node_modules/@types/mysql": {
++      "version": "2.15.27",
++      "resolved": "https://registry.npmjs.org/@types/mysql/-/mysql-2.15.27.tgz",
++      "integrity": "sha512-YfWiV16IY0OeBfBCk8+hXKmdTKrKlwKN1MNKAPBu5JYxLwBEZl7QzeEpGnlZb3VMGJrrGmB84gXiH+ofs/TezA==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/node": "*"
++      }
++    },
+     "node_modules/@types/node": {
+       "version": "22.19.17",
+       "resolved": "https://registry.npmjs.org/@types/node/-/node-22.19.17.tgz",
+       "integrity": "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "undici-types": "~6.21.0"
+       }
+     },
++    "node_modules/@types/pg": {
++      "version": "8.15.6",
++      "resolved": "https://registry.npmjs.org/@types/pg/-/pg-8.15.6.tgz",
++      "integrity": "sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/node": "*",
++        "pg-protocol": "*",
++        "pg-types": "^2.2.0"
++      }
++    },
++    "node_modules/@types/pg-pool": {
++      "version": "2.0.7",
++      "resolved": "https://registry.npmjs.org/@types/pg-pool/-/pg-pool-2.0.7.tgz",
++      "integrity": "sha512-U4CwmGVQcbEuqpyju8/ptOKg6gEC+Tqsvj2xS9o1g71bUh8twxnC6ZL5rZKCsGN0iyH0CwgUyc9VR5owNQF9Ng==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/pg": "*"
++      }
++    },
++    "node_modules/@types/tedious": {
++      "version": "4.0.14",
++      "resolved": "https://registry.npmjs.org/@types/tedious/-/tedious-4.0.14.tgz",
++      "integrity": "sha512-KHPsfX/FoVbUGbyYvk1q9MMQHLPeRZhRJZdO45Q4YjvFkv4hMNghCWTvy7rdKessBsmtz4euWCWAB6/tVpI1Iw==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/node": "*"
++      }
++    },
++    "node_modules/acorn": {
++      "version": "8.16.0",
++      "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz",
++      "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
++      "license": "MIT",
++      "bin": {
++        "acorn": "bin/acorn"
++      },
++      "engines": {
++        "node": ">=0.4.0"
++      }
++    },
++    "node_modules/acorn-import-attributes": {
++      "version": "1.9.5",
++      "resolved": "https://registry.npmjs.org/acorn-import-attributes/-/acorn-import-attributes-1.9.5.tgz",
++      "integrity": "sha512-n02Vykv5uA3eHGM/Z2dQrcD56kL8TyDb2p1+0P83PClMnC/nc+anbQRhIOWnSq4Ke/KvDPrY3C9hDtC/A3eHnQ==",
++      "license": "MIT",
++      "peerDependencies": {
++        "acorn": "^8"
++      }
++    },
++    "node_modules/balanced-match": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
++      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
++      "license": "MIT",
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
++    "node_modules/brace-expansion": {
++      "version": "5.0.6",
++      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.6.tgz",
++      "integrity": "sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==",
++      "license": "MIT",
++      "dependencies": {
++        "balanced-match": "^4.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
++    "node_modules/cjs-module-lexer": {
++      "version": "2.2.0",
++      "resolved": "https://registry.npmjs.org/cjs-module-lexer/-/cjs-module-lexer-2.2.0.tgz",
++      "integrity": "sha512-4bHTS2YuzUvtoLjdy+98ykbNB5jS0+07EvFNXerqZQJ89F7DI6ET7OQo/HJuW6K0aVsKA9hj9/RVb2kQVOrPDQ==",
++      "license": "MIT"
++    },
++    "node_modules/debug": {
++      "version": "4.4.3",
++      "resolved": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
++      "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
++      "license": "MIT",
++      "dependencies": {
++        "ms": "^2.1.3"
++      },
++      "engines": {
++        "node": ">=6.0"
++      },
++      "peerDependenciesMeta": {
++        "supports-color": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/detect-libc": {
++      "version": "2.1.2",
++      "resolved": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
++      "integrity": "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==",
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/esbuild": {
+       "version": "0.27.7",
+       "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.27.7.tgz",
+@@ -522,6 +1362,12 @@
+         "@esbuild/win32-x64": "0.27.7"
+       }
+     },
++    "node_modules/forwarded-parse": {
++      "version": "2.1.2",
++      "resolved": "https://registry.npmjs.org/forwarded-parse/-/forwarded-parse-2.1.2.tgz",
++      "integrity": "sha512-alTFZZQDKMporBH77856pXgzhEzaUVmLCDk+egLgIgHst3Tpndzz8MnKe+GzRJRfvVdn69HhpW7cmXzvtLvJAw==",
++      "license": "MIT"
++    },
+     "node_modules/fsevents": {
+       "version": "2.3.3",
+       "resolved": "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz",
+@@ -559,6 +1405,143 @@
+         "node": ">=16.9.0"
+       }
+     },
++    "node_modules/import-in-the-middle": {
++      "version": "3.0.1",
++      "resolved": "https://registry.npmjs.org/import-in-the-middle/-/import-in-the-middle-3.0.1.tgz",
++      "integrity": "sha512-pYkiyXVL2Mf3pozdlDGV6NAObxQx13Ae8knZk1UJRJ6uRW/ZRmTGHlQYtrsSl7ubuE5F8CD1z+s1n4RHNuTtuA==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "acorn": "^8.15.0",
++        "acorn-import-attributes": "^1.9.5",
++        "cjs-module-lexer": "^2.2.0",
++        "module-details-from-path": "^1.0.4"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/minimatch": {
++      "version": "10.2.5",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz",
++      "integrity": "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==",
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "brace-expansion": "^5.0.5"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/module-details-from-path": {
++      "version": "1.0.4",
++      "resolved": "https://registry.npmjs.org/module-details-from-path/-/module-details-from-path-1.0.4.tgz",
++      "integrity": "sha512-EGWKgxALGMgzvxYF1UyGTy0HXX/2vHLkw6+NvDKW2jypWbHpjQuj4UMcqQWXHERJhVGKikolT06G3bcKe4fi7w==",
++      "license": "MIT"
++    },
++    "node_modules/ms": {
++      "version": "2.1.3",
++      "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
++      "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
++      "license": "MIT"
++    },
++    "node_modules/node-abi": {
++      "version": "3.92.0",
++      "resolved": "https://registry.npmjs.org/node-abi/-/node-abi-3.92.0.tgz",
++      "integrity": "sha512-KdHvFWZjEKDf0cakgFjebl371GPsISX2oZHcuyKqM7DtogIsHrqKeLTo8wBHxaXRAQlY2PsPlZmfo+9ZCxEREQ==",
++      "license": "MIT",
++      "dependencies": {
++        "semver": "^7.3.5"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/pg-int8": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz",
++      "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==",
++      "license": "ISC",
++      "engines": {
++        "node": ">=4.0.0"
++      }
++    },
++    "node_modules/pg-protocol": {
++      "version": "1.13.0",
++      "resolved": "https://registry.npmjs.org/pg-protocol/-/pg-protocol-1.13.0.tgz",
++      "integrity": "sha512-zzdvXfS6v89r6v7OcFCHfHlyG/wvry1ALxZo4LqgUoy7W9xhBDMaqOuMiF3qEV45VqsN6rdlcehHrfDtlCPc8w==",
++      "license": "MIT"
++    },
++    "node_modules/pg-types": {
++      "version": "2.2.0",
++      "resolved": "https://registry.npmjs.org/pg-types/-/pg-types-2.2.0.tgz",
++      "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
++      "license": "MIT",
++      "dependencies": {
++        "pg-int8": "1.0.1",
++        "postgres-array": "~2.0.0",
++        "postgres-bytea": "~1.0.0",
++        "postgres-date": "~1.0.4",
++        "postgres-interval": "^1.1.0"
++      },
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/postgres-array": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/postgres-array/-/postgres-array-2.0.0.tgz",
++      "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/postgres-bytea": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-1.0.1.tgz",
++      "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/postgres-date": {
++      "version": "1.0.7",
++      "resolved": "https://registry.npmjs.org/postgres-date/-/postgres-date-1.0.7.tgz",
++      "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/postgres-interval": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/postgres-interval/-/postgres-interval-1.2.0.tgz",
++      "integrity": "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==",
++      "license": "MIT",
++      "dependencies": {
++        "xtend": "^4.0.0"
++      },
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/require-in-the-middle": {
++      "version": "8.0.1",
++      "resolved": "https://registry.npmjs.org/require-in-the-middle/-/require-in-the-middle-8.0.1.tgz",
++      "integrity": "sha512-QT7FVMXfWOYFbeRBF6nu+I6tr2Tf3u0q8RIEjNob/heKY/nh7drD/k7eeMFmSQgnTtCzLDcCu/XEnpW2wk4xCQ==",
++      "license": "MIT",
++      "dependencies": {
++        "debug": "^4.3.5",
++        "module-details-from-path": "^1.0.3"
++      },
++      "engines": {
++        "node": ">=9.3.0 || >=8.10.0 <9.0.0"
++      }
++    },
+     "node_modules/resolve-pkg-maps": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/resolve-pkg-maps/-/resolve-pkg-maps-1.0.0.tgz",
+@@ -569,6 +1552,18 @@
+         "url": "https://github.com/privatenumber/resolve-pkg-maps?sponsor=1"
+       }
+     },
++    "node_modules/semver": {
++      "version": "7.8.0",
++      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.0.tgz",
++      "integrity": "sha512-AcM7dV/5ul4EekoQ29Agm5vri8JNqRyj39o0qpX6vDF2GZrtutZl5RwgD1XnZjiTAfncsJhMI48QQH3sN87YNA==",
++      "license": "ISC",
++      "bin": {
++        "semver": "bin/semver.js"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
+     "node_modules/tsx": {
+       "version": "4.21.0",
+       "resolved": "https://registry.npmjs.org/tsx/-/tsx-4.21.0.tgz",
+@@ -593,8 +1588,16 @@
+       "version": "6.21.0",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz",
+       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==",
+-      "dev": true,
+       "license": "MIT"
++    },
++    "node_modules/xtend": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
++      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.4"
++      }
+     }
+   }
+ }
+diff --git a/backend/package.json b/backend/package.json
+index 43a22ed..d9baccc 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -4,15 +4,18 @@
+   "private": true,
+   "type": "module",
+   "scripts": {
+-    "dev": "tsx watch src/index.ts",
+-    "start": "tsx src/index.ts"
++    "dev": "node --import ./instrument.mjs --import tsx/esm --watch src/index.ts",
++    "start": "node --import ./instrument.mjs --import tsx/esm src/index.ts"
+   },
+   "dependencies": {
+-    "hono": "^4.12.18",
+-    "@hono/node-server": "^1.14.1"
++    "@hono/node-server": "^1.14.1",
++    "@sentry/hono": "^10.52.0",
++    "@sentry/node": "^10.52.0",
++    "@sentry/profiling-node": "^10.52.0",
++    "hono": "^4.12.18"
+   },
+   "devDependencies": {
+-    "tsx": "^4.19.4",
+-    "@types/node": "^22.15.17"
++    "@types/node": "^22.15.17",
++    "tsx": "^4.19.4"
+   }
+ }
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index 417154c..926ccc3 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -1,10 +1,11 @@
+ import { Hono } from "hono";
+-import { logger } from "hono/logger";
+ import { serve } from "@hono/node-server";
++import { sentry } from "@sentry/hono/node";
++import "../instrument.mjs";
+ 
+ const app = new Hono().basePath("/v1");
+ 
+-app.use(logger());
++app.use(sentry(app));
+ 
+ // ---------------------------------------------------------------------------
+ // GET /v1/locations/default
+@@ -63,7 +64,7 @@ app.get("/weather/:locationID", (c) => {
+ // Data
+ // ---------------------------------------------------------------------------
+ 
+-type Scenario = "clearDay" | "rainy" | "snowy" | "night" | "stormy";
++type Scenario = "clearDay" | "rainy" | "snowy" | "night" | "stormy" | "windy";
+ 
+ const scenarioByLocationID: Record<string, Scenario> = {
+   "loc-current-san-francisco": "clearDay",
+@@ -93,47 +94,331 @@ const scenarioByLocationID: Record<string, Scenario> = {
+   "loc-th-bangkok": "stormy",
+   "loc-ae-dubai": "clearDay",
+   "loc-es-madrid": "clearDay",
++  "loc-us-il-chicago": "windy",
+ };
+ 
+ const defaultLocations = [
+-  loc("loc-current-san-francisco", "San Francisco", "Current Location", null, 18, 20, 12, "mostly_sunny", 13, 24),
+-  loc("loc-us-or-portland", "Portland", "Oregon, USA", null, 11, 13, 9, "light_rain", 13, 24),
+-  loc("loc-us-co-aspen", "Aspen", "Colorado, USA", null, -4, -2, -10, "light_snow", 14, 24),
+-  loc("loc-is-reykjavik", "Reykjavík", "Iceland", null, 3, 6, 1, "clear_night", 20, 24),
+-  loc("loc-us-la-new-orleans", "New Orleans", "Louisiana, USA", null, 22, 26, 20, "thunderstorms", 15, 24),
+-  loc("loc-jp-tokyo", "Tokyo", "Japan", null, 14, 17, 11, "partly_cloudy", 5, 24),
++  loc(
++    "loc-current-san-francisco",
++    "San Francisco",
++    "Current Location",
++    null,
++    18,
++    20,
++    12,
++    "mostly_sunny",
++    13,
++    24,
++  ),
++  loc(
++    "loc-us-or-portland",
++    "Portland",
++    "Oregon, USA",
++    null,
++    11,
++    13,
++    9,
++    "light_rain",
++    13,
++    24,
++  ),
++  loc(
++    "loc-us-co-aspen",
++    "Aspen",
++    "Colorado, USA",
++    null,
++    -4,
++    -2,
++    -10,
++    "light_snow",
++    14,
++    24,
++  ),
++  loc(
++    "loc-is-reykjavik",
++    "Reykjavík",
++    "Iceland",
++    null,
++    3,
++    6,
++    1,
++    "clear_night",
++    20,
++    24,
++  ),
++  loc(
++    "loc-us-la-new-orleans",
++    "New Orleans",
++    "Louisiana, USA",
++    null,
++    22,
++    26,
++    20,
++    "thunderstorms",
++    15,
++    24,
++  ),
++  loc(
++    "loc-jp-tokyo",
++    "Tokyo",
++    "Japan",
++    null,
++    14,
++    17,
++    11,
++    "partly_cloudy",
++    5,
++    24,
++  ),
+   loc("loc-pt-lisbon", "Lisbon", "Portugal", null, 19, 22, 14, "sunny", 21, 24),
++  loc(
++    "loc-us-il-chicago",
++    "Chicago",
++    "Illinois, USA",
++    null,
++    15,
++    18,
++    10,
++    "partly_cloudy",
++    11,
++    30,
++  ),
+ ];
+ 
+ const searchPool = [
+-  loc("loc-fr-paris", "Paris", "Île-de-France, France", "FR", 15, 18, 11, "partly_cloudy", 22, 24),
+-  loc("loc-gb-london", "London", "England, United Kingdom", "GB", 13, 16, 9, "light_rain", 21, 24),
++  loc(
++    "loc-fr-paris",
++    "Paris",
++    "Île-de-France, France",
++    "FR",
++    15,
++    18,
++    11,
++    "partly_cloudy",
++    22,
++    24,
++  ),
++  loc(
++    "loc-gb-london",
++    "London",
++    "England, United Kingdom",
++    "GB",
++    13,
++    16,
++    9,
++    "light_rain",
++    21,
++    24,
++  ),
+   loc("loc-de-berlin", "Berlin", "Germany", "DE", 11, 14, 7, "cloudy", 22, 24),
+-  loc("loc-us-ny-new-york", "New York", "New York, USA", "US", 16, 19, 12, "sunny", 16, 24),
+-  loc("loc-au-sydney", "Sydney", "New South Wales, Australia", "AU", 22, 25, 18, "sunny", 6, 24),
+-  loc("loc-sg-singapore", "Singapore", "Singapore", "SG", 29, 31, 26, "thunderstorms", 4, 24),
+-  loc("loc-in-mumbai", "Mumbai", "Maharashtra, India", "IN", 31, 33, 26, "hazy", 1, 54),
++  loc(
++    "loc-us-ny-new-york",
++    "New York",
++    "New York, USA",
++    "US",
++    16,
++    19,
++    12,
++    "sunny",
++    16,
++    24,
++  ),
++  loc(
++    "loc-au-sydney",
++    "Sydney",
++    "New South Wales, Australia",
++    "AU",
++    22,
++    25,
++    18,
++    "sunny",
++    6,
++    24,
++  ),
++  loc(
++    "loc-sg-singapore",
++    "Singapore",
++    "Singapore",
++    "SG",
++    29,
++    31,
++    26,
++    "thunderstorms",
++    4,
++    24,
++  ),
++  loc(
++    "loc-in-mumbai",
++    "Mumbai",
++    "Maharashtra, India",
++    "IN",
++    31,
++    33,
++    26,
++    "hazy",
++    1,
++    54,
++  ),
+   loc("loc-eg-cairo", "Cairo", "Egypt", "EG", 28, 32, 19, "sunny", 23, 24),
+-  loc("loc-za-cape-town", "Cape Town", "Western Cape, South Africa", "ZA", 20, 23, 14, "mostly_sunny", 23, 24),
+-  loc("loc-is-capital-reykjavik", "Reykjavík", "Capital Region, Iceland", "IS", 3, 6, 1, "clear_night", 20, 24),
++  loc(
++    "loc-za-cape-town",
++    "Cape Town",
++    "Western Cape, South Africa",
++    "ZA",
++    20,
++    23,
++    14,
++    "mostly_sunny",
++    23,
++    24,
++  ),
++  loc(
++    "loc-is-capital-reykjavik",
++    "Reykjavík",
++    "Capital Region, Iceland",
++    "IS",
++    3,
++    6,
++    1,
++    "clear_night",
++    20,
++    24,
++  ),
+   loc("loc-no-oslo", "Oslo", "Norway", "NO", 5, 8, 1, "snow_showers", 22, 24),
+-  loc("loc-se-stockholm", "Stockholm", "Sweden", "SE", 6, 9, 2, "partly_cloudy", 22, 24),
+-  loc("loc-ca-vancouver", "Vancouver", "British Columbia, Canada", "CA", 9, 12, 6, "light_rain", 13, 24),
+-  loc("loc-ca-toronto", "Toronto", "Ontario, Canada", "CA", 8, 12, 5, "cloudy", 16, 24),
+-  loc("loc-mx-mexico-city", "Mexico City", "Mexico", "MX", 22, 26, 13, "sunny", 14, 24),
+-  loc("loc-ar-buenos-aires", "Buenos Aires", "Argentina", "AR", 18, 21, 13, "partly_cloudy", 17, 24),
+-  loc("loc-kr-seoul", "Seoul", "South Korea", "KR", 13, 17, 8, "clear_day", 5, 24),
+-  loc("loc-th-bangkok", "Bangkok", "Thailand", "TH", 32, 34, 26, "thunderstorms", 3, 24),
+-  loc("loc-ae-dubai", "Dubai", "United Arab Emirates", "AE", 33, 37, 26, "sunny", 0, 24),
++  loc(
++    "loc-se-stockholm",
++    "Stockholm",
++    "Sweden",
++    "SE",
++    6,
++    9,
++    2,
++    "partly_cloudy",
++    22,
++    24,
++  ),
++  loc(
++    "loc-ca-vancouver",
++    "Vancouver",
++    "British Columbia, Canada",
++    "CA",
++    9,
++    12,
++    6,
++    "light_rain",
++    13,
++    24,
++  ),
++  loc(
++    "loc-ca-toronto",
++    "Toronto",
++    "Ontario, Canada",
++    "CA",
++    8,
++    12,
++    5,
++    "cloudy",
++    16,
++    24,
++  ),
++  loc(
++    "loc-mx-mexico-city",
++    "Mexico City",
++    "Mexico",
++    "MX",
++    22,
++    26,
++    13,
++    "sunny",
++    14,
++    24,
++  ),
++  loc(
++    "loc-ar-buenos-aires",
++    "Buenos Aires",
++    "Argentina",
++    "AR",
++    18,
++    21,
++    13,
++    "partly_cloudy",
++    17,
++    24,
++  ),
++  loc(
++    "loc-kr-seoul",
++    "Seoul",
++    "South Korea",
++    "KR",
++    13,
++    17,
++    8,
++    "clear_day",
++    5,
++    24,
++  ),
++  loc(
++    "loc-th-bangkok",
++    "Bangkok",
++    "Thailand",
++    "TH",
++    32,
++    34,
++    26,
++    "thunderstorms",
++    3,
++    24,
++  ),
++  loc(
++    "loc-ae-dubai",
++    "Dubai",
++    "United Arab Emirates",
++    "AE",
++    33,
++    37,
++    26,
++    "sunny",
++    0,
++    24,
++  ),
+   loc("loc-es-madrid", "Madrid", "Spain", "ES", 19, 22, 12, "sunny", 22, 24),
++  loc(
++    "loc-us-il-chicago",
++    "Chicago",
++    "Illinois, USA",
++    "US",
++    15,
++    18,
++    10,
++    "partly_cloudy",
++    11,
++    30,
++  ),
+ ];
+ 
+ function loc(
+-  id: string, name: string, subtitle: string, country: string | null,
+-  temperatureC: number, highC: number, lowC: number,
+-  condition: string, hour: number, minute: number,
++  id: string,
++  name: string,
++  subtitle: string,
++  country: string | null,
++  temperatureC: number,
++  highC: number,
++  lowC: number,
++  condition: string,
++  hour: number,
++  minute: number,
+ ) {
+-  return { id, name, subtitle, country, temperatureC, highC, lowC, condition, localTime: { hour, minute } };
++  return {
++    id,
++    name,
++    subtitle,
++    country,
++    temperatureC,
++    highC,
++    lowC,
++    condition,
++    localTime: { hour, minute },
++  };
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -142,108 +427,269 @@ function loc(
+ 
+ const currentWeather: Record<Scenario, object> = {
+   clearDay: {
+-    id: "", temperatureC: 18, highC: 20, lowC: 12, feelsLikeC: 17, dewPointC: 9,
++    id: "",
++    temperatureC: 18,
++    highC: 20,
++    lowC: 12,
++    feelsLikeC: 17,
++    dewPointC: 9,
+     condition: "mostly_sunny",
+     solarProgress: { kind: "daylight", daylightFraction: 0.62 },
+-    sunrise: { hour: 6, minute: 18 }, sunset: { hour: 19, minute: 42 },
+-    airQualityIndex: 38, airQualityCategory: "good",
+-    uvIndex: 6, uvCategory: "high",
+-    windKph: 13, windDirectionDegrees: 292, humidity: 64,
+-    visibilityKilometers: 16.1, pressureMillibars: 1018, pressureTrend: "rising", precipChance: 5,
++    sunrise: { hour: 6, minute: 18 },
++    sunset: { hour: 19, minute: 42 },
++    airQualityIndex: 38,
++    airQualityCategory: "good",
++    uvIndex: 6,
++    uvCategory: "high",
++    windKph: 13,
++    windDirectionDegrees: 292,
++    humidity: 64,
++    visibilityKilometers: 16.1,
++    pressureMillibars: 1018,
++    pressureTrend: "rising",
++    precipChance: 5,
+   },
+   rainy: {
+-    id: "", temperatureC: 11, highC: 13, lowC: 9, feelsLikeC: 9, dewPointC: 8,
++    id: "",
++    temperatureC: 11,
++    highC: 13,
++    lowC: 9,
++    feelsLikeC: 9,
++    dewPointC: 8,
+     condition: "light_rain",
+     solarProgress: { kind: "daylight", daylightFraction: 0.45 },
+-    sunrise: { hour: 6, minute: 42 }, sunset: { hour: 19, minute: 18 },
+-    airQualityIndex: 22, airQualityCategory: "good",
+-    uvIndex: 1, uvCategory: "low",
+-    windKph: 23, windDirectionDegrees: 225, humidity: 89,
+-    visibilityKilometers: 9.7, pressureMillibars: 1006, pressureTrend: "falling", precipChance: 78,
++    sunrise: { hour: 6, minute: 42 },
++    sunset: { hour: 19, minute: 18 },
++    airQualityIndex: 22,
++    airQualityCategory: "good",
++    uvIndex: 1,
++    uvCategory: "low",
++    windKph: 23,
++    windDirectionDegrees: 225,
++    humidity: 89,
++    visibilityKilometers: 9.7,
++    pressureMillibars: 1006,
++    pressureTrend: "falling",
++    precipChance: 78,
+   },
+   snowy: {
+-    id: "", temperatureC: -4, highC: -2, lowC: -10, feelsLikeC: -8, dewPointC: -7,
++    id: "",
++    temperatureC: -4,
++    highC: -2,
++    lowC: -10,
++    feelsLikeC: -8,
++    dewPointC: -7,
+     condition: "light_snow",
+-    solarProgress: { kind: "daylight", daylightFraction: 0.50 },
+-    sunrise: { hour: 7, minute: 14 }, sunset: { hour: 17, minute: 38 },
+-    airQualityIndex: 18, airQualityCategory: "good",
+-    uvIndex: 2, uvCategory: "low",
+-    windKph: 10, windDirectionDegrees: 270, humidity: 78,
+-    visibilityKilometers: 6.4, pressureMillibars: 1022, pressureTrend: "steady", precipChance: 65,
++    solarProgress: { kind: "daylight", daylightFraction: 0.5 },
++    sunrise: { hour: 7, minute: 14 },
++    sunset: { hour: 17, minute: 38 },
++    airQualityIndex: 18,
++    airQualityCategory: "good",
++    uvIndex: 2,
++    uvCategory: "low",
++    windKph: 10,
++    windDirectionDegrees: 270,
++    humidity: 78,
++    visibilityKilometers: 6.4,
++    pressureMillibars: 1022,
++    pressureTrend: "steady",
++    precipChance: 65,
+   },
+   night: {
+-    id: "", temperatureC: 3, highC: 6, lowC: 1, feelsLikeC: 1, dewPointC: 0,
++    id: "",
++    temperatureC: 3,
++    highC: 6,
++    lowC: 1,
++    feelsLikeC: 1,
++    dewPointC: 0,
+     condition: "clear_night",
+     solarProgress: { kind: "after_sunset", daylightFraction: null },
+-    sunrise: { hour: 5, minute: 46 }, sunset: { hour: 20, minute: 24 },
+-    airQualityIndex: 12, airQualityCategory: "good",
+-    uvIndex: 0, uvCategory: "none",
+-    windKph: 6, windDirectionDegrees: 0, humidity: 71,
+-    visibilityKilometers: 16.1, pressureMillibars: 1014, pressureTrend: "steady", precipChance: 8,
++    sunrise: { hour: 5, minute: 46 },
++    sunset: { hour: 20, minute: 24 },
++    airQualityIndex: 12,
++    airQualityCategory: "good",
++    uvIndex: 0,
++    uvCategory: "none",
++    windKph: 6,
++    windDirectionDegrees: 0,
++    humidity: 71,
++    visibilityKilometers: 16.1,
++    pressureMillibars: 1014,
++    pressureTrend: "steady",
++    precipChance: 8,
+   },
+   stormy: {
+-    id: "", temperatureC: 22, highC: 26, lowC: 20, feelsLikeC: 24, dewPointC: 19,
++    id: "",
++    temperatureC: 22,
++    highC: 26,
++    lowC: 20,
++    feelsLikeC: 24,
++    dewPointC: 19,
+     condition: "thunderstorms",
+     solarProgress: { kind: "daylight", daylightFraction: 0.78 },
+-    sunrise: { hour: 6, minute: 8 }, sunset: { hour: 19, minute: 52 },
+-    airQualityIndex: 55, airQualityCategory: "moderate",
+-    uvIndex: 3, uvCategory: "moderate",
+-    windKph: 35, windDirectionDegrees: 180, humidity: 86,
+-    visibilityKilometers: 4.8, pressureMillibars: 998, pressureTrend: "falling", precipChance: 92,
++    sunrise: { hour: 6, minute: 8 },
++    sunset: { hour: 19, minute: 52 },
++    airQualityIndex: 55,
++    airQualityCategory: "moderate",
++    uvIndex: 3,
++    uvCategory: "moderate",
++    windKph: 35,
++    windDirectionDegrees: 180,
++    humidity: 86,
++    visibilityKilometers: 4.8,
++    pressureMillibars: 998,
++    pressureTrend: "falling",
++    precipChance: 92,
++  },
++  windy: {
++    id: "",
++    temperatureC: 15,
++    highC: 18,
++    lowC: 10,
++    feelsLikeC: 11,
++    dewPointC: 7,
++    condition: "partly_cloudy",
++    solarProgress: { kind: "daylight", daylightFraction: 0.55 },
++    sunrise: { hour: 5, minute: 52 },
++    sunset: { hour: 20, minute: 12 },
++    airQualityIndex: 42,
++    airQualityCategory: "good",
++    uvIndex: 5,
++    uvCategory: "moderate",
++    windKph: 45,
++    windDirectionDegrees: 315,
++    humidity: 52,
++    visibilityKilometers: 14.5,
++    pressureMillibars: 1012,
++    pressureTrend: "falling",
++    precipChance: 15,
+   },
+ };
+ 
+-function h(kind: "current" | "clock", temp: number, condition: string, hour?: number, minute?: number) {
+-  const id = kind === "current"
+-    ? `hourly-now-${temp}-${condition}`
+-    : `hourly-${hour}-${minute}-${temp}-${condition}`;
+-  return { id, hour: { kind, hour: hour ?? null, minute: minute ?? null }, temperatureC: temp, condition };
++function h(
++  kind: "current" | "clock",
++  temp: number,
++  condition: string,
++  hour?: number,
++  minute?: number,
++) {
++  const id =
++    kind === "current"
++      ? `hourly-now-${temp}-${condition}`
++      : `hourly-${hour}-${minute}-${temp}-${condition}`;
++  return {
++    id,
++    hour: { kind, hour: hour ?? null, minute: minute ?? null },
++    temperatureC: temp,
++    condition,
++  };
+ }
+ 
+ const hourlyForecast: Record<Scenario, object[]> = {
+   clearDay: [
+-    h("current", 18, "sunny"), h("clock", 19, "sunny", 14, 0), h("clock", 19, "sunny", 15, 0),
+-    h("clock", 20, "sunny", 16, 0), h("clock", 19, "sunny", 17, 0), h("clock", 18, "partly_cloudy", 18, 0),
+-    h("clock", 17, "partly_cloudy", 19, 0), h("clock", 16, "clear_night", 20, 0),
+-    h("clock", 14, "clear_night", 21, 0), h("clock", 13, "clear_night", 22, 0),
+-    h("clock", 13, "clear_night", 23, 0), h("clock", 12, "clear_night", 0, 0),
++    h("current", 18, "sunny"),
++    h("clock", 19, "sunny", 14, 0),
++    h("clock", 19, "sunny", 15, 0),
++    h("clock", 20, "sunny", 16, 0),
++    h("clock", 19, "sunny", 17, 0),
++    h("clock", 18, "partly_cloudy", 18, 0),
++    h("clock", 17, "partly_cloudy", 19, 0),
++    h("clock", 16, "clear_night", 20, 0),
++    h("clock", 14, "clear_night", 21, 0),
++    h("clock", 13, "clear_night", 22, 0),
++    h("clock", 13, "clear_night", 23, 0),
++    h("clock", 12, "clear_night", 0, 0),
+   ],
+   rainy: [
+-    h("current", 11, "light_rain"), h("clock", 12, "light_rain", 14, 0), h("clock", 12, "light_rain", 15, 0),
+-    h("clock", 13, "heavy_rain", 16, 0), h("clock", 12, "heavy_rain", 17, 0), h("clock", 12, "light_rain", 18, 0),
+-    h("clock", 11, "light_rain", 19, 0), h("clock", 11, "cloudy", 20, 0),
+-    h("clock", 10, "cloudy", 21, 0), h("clock", 9, "cloudy", 22, 0),
+-    h("clock", 9, "light_rain", 23, 0), h("clock", 9, "light_rain", 0, 0),
++    h("current", 11, "light_rain"),
++    h("clock", 12, "light_rain", 14, 0),
++    h("clock", 12, "light_rain", 15, 0),
++    h("clock", 13, "heavy_rain", 16, 0),
++    h("clock", 12, "heavy_rain", 17, 0),
++    h("clock", 12, "light_rain", 18, 0),
++    h("clock", 11, "light_rain", 19, 0),
++    h("clock", 11, "cloudy", 20, 0),
++    h("clock", 10, "cloudy", 21, 0),
++    h("clock", 9, "cloudy", 22, 0),
++    h("clock", 9, "light_rain", 23, 0),
++    h("clock", 9, "light_rain", 0, 0),
+   ],
+   snowy: [
+-    h("current", -4, "light_snow"), h("clock", -3, "light_snow", 14, 0), h("clock", -3, "light_snow", 15, 0),
+-    h("clock", -2, "cloudy", 16, 0), h("clock", -3, "cloudy", 17, 0), h("clock", -4, "light_snow", 18, 0),
+-    h("clock", -6, "light_snow", 19, 0), h("clock", -7, "light_snow", 20, 0),
+-    h("clock", -8, "light_snow", 21, 0), h("clock", -9, "cloudy", 22, 0),
+-    h("clock", -9, "cloudy", 23, 0), h("clock", -10, "clear_night", 0, 0),
++    h("current", -4, "light_snow"),
++    h("clock", -3, "light_snow", 14, 0),
++    h("clock", -3, "light_snow", 15, 0),
++    h("clock", -2, "cloudy", 16, 0),
++    h("clock", -3, "cloudy", 17, 0),
++    h("clock", -4, "light_snow", 18, 0),
++    h("clock", -6, "light_snow", 19, 0),
++    h("clock", -7, "light_snow", 20, 0),
++    h("clock", -8, "light_snow", 21, 0),
++    h("clock", -9, "cloudy", 22, 0),
++    h("clock", -9, "cloudy", 23, 0),
++    h("clock", -10, "clear_night", 0, 0),
+   ],
+   night: [
+-    h("current", 3, "clear_night"), h("clock", 3, "clear_night", 23, 0), h("clock", 2, "clear_night", 0, 0),
+-    h("clock", 2, "clear_night", 1, 0), h("clock", 1, "clear_night", 2, 0), h("clock", 1, "clear_night", 3, 0),
+-    h("clock", 1, "clear_night", 4, 0), h("clock", 1, "clear_night", 5, 0),
+-    h("clock", 2, "partly_cloudy", 6, 0), h("clock", 3, "sunny", 7, 0),
+-    h("clock", 4, "sunny", 8, 0), h("clock", 6, "sunny", 9, 0),
++    h("current", 3, "clear_night"),
++    h("clock", 3, "clear_night", 23, 0),
++    h("clock", 2, "clear_night", 0, 0),
++    h("clock", 2, "clear_night", 1, 0),
++    h("clock", 1, "clear_night", 2, 0),
++    h("clock", 1, "clear_night", 3, 0),
++    h("clock", 1, "clear_night", 4, 0),
++    h("clock", 1, "clear_night", 5, 0),
++    h("clock", 2, "partly_cloudy", 6, 0),
++    h("clock", 3, "sunny", 7, 0),
++    h("clock", 4, "sunny", 8, 0),
++    h("clock", 6, "sunny", 9, 0),
+   ],
+   stormy: [
+-    h("current", 22, "thunderstorms"), h("clock", 23, "thunderstorms", 14, 0), h("clock", 24, "heavy_rain", 15, 0),
+-    h("clock", 24, "heavy_rain", 16, 0), h("clock", 26, "thunderstorms", 17, 0), h("clock", 26, "thunderstorms", 18, 0),
+-    h("clock", 25, "light_rain", 19, 0), h("clock", 23, "light_rain", 20, 0),
+-    h("clock", 22, "cloudy", 21, 0), h("clock", 21, "cloudy", 22, 0),
+-    h("clock", 21, "cloudy", 23, 0), h("clock", 20, "cloudy", 0, 0),
++    h("current", 22, "thunderstorms"),
++    h("clock", 23, "thunderstorms", 14, 0),
++    h("clock", 24, "heavy_rain", 15, 0),
++    h("clock", 24, "heavy_rain", 16, 0),
++    h("clock", 26, "thunderstorms", 17, 0),
++    h("clock", 26, "thunderstorms", 18, 0),
++    h("clock", 25, "light_rain", 19, 0),
++    h("clock", 23, "light_rain", 20, 0),
++    h("clock", 22, "cloudy", 21, 0),
++    h("clock", 21, "cloudy", 22, 0),
++    h("clock", 21, "cloudy", 23, 0),
++    h("clock", 20, "cloudy", 0, 0),
++  ],
++  windy: [
++    h("current", 15, "partly_cloudy"),
++    h("clock", 16, "partly_cloudy", 12, 0),
++    h("clock", 17, "partly_cloudy", 13, 0),
++    h("clock", 18, "sunny", 14, 0),
++    h("clock", 17, "sunny", 15, 0),
++    h("clock", 16, "partly_cloudy", 16, 0),
++    h("clock", 15, "cloudy", 17, 0),
++    h("clock", 14, "cloudy", 18, 0),
++    h("clock", 13, "partly_cloudy", 19, 0),
++    h("clock", 12, "clear_night", 20, 0),
++    h("clock", 11, "clear_night", 21, 0),
++    h("clock", 10, "clear_night", 22, 0),
+   ],
+ };
+ 
+-function d(kind: "today" | "weekday", condition: string, low: number, high: number, weekLow: number, weekHigh: number, weekdayRawValue?: number) {
++function d(
++  kind: "today" | "weekday",
++  condition: string,
++  low: number,
++  high: number,
++  weekLow: number,
++  weekHigh: number,
++  weekdayRawValue?: number,
++) {
+   const dayPart = kind === "today" ? "today" : `weekday-${weekdayRawValue}`;
+   return {
+     id: `daily-${dayPart}-${condition}-${low}-${high}`,
+     day: { kind, weekdayRawValue: weekdayRawValue ?? null },
+-    condition, lowC: low, highC: high, weekLowC: weekLow, weekHighC: weekHigh,
++    condition,
++    lowC: low,
++    highC: high,
++    weekLowC: weekLow,
++    weekHighC: weekHigh,
+   };
+ }
+ 
+@@ -293,6 +739,15 @@ const dailyForecast: Record<Scenario, object[]> = {
+     d("weekday", "sunny", 21, 29, 18, 31, 1),
+     d("weekday", "thunderstorms", 19, 24, 18, 31, 2),
+   ],
++  windy: [
++    d("today", "partly_cloudy", 10, 18, 8, 22),
++    d("weekday", "sunny", 11, 20, 8, 22, 4),
++    d("weekday", "partly_cloudy", 12, 22, 8, 22, 5),
++    d("weekday", "cloudy", 10, 17, 8, 22, 6),
++    d("weekday", "light_rain", 8, 14, 8, 22, 7),
++    d("weekday", "sunny", 12, 21, 8, 22, 1),
++    d("weekday", "partly_cloudy", 11, 19, 8, 22, 2),
++  ],
+ };
+ 
+ interface PrecipDetail {
+@@ -329,54 +784,119 @@ function getPrecipitationDetail(scenario: Scenario): PrecipDetail {
+ 
+ const precipitationDetail: Partial<Record<Scenario, PrecipDetail>> = {
+   clearDay: {
+-    id: "", temperatureC: 18, highC: 20, lowC: 12, feelsLikeC: 17, dewPointC: 9,
++    id: "",
++    temperatureC: 18,
++    highC: 20,
++    lowC: 12,
++    feelsLikeC: 17,
++    dewPointC: 9,
+     condition: "mostly_sunny",
+     solarProgress: { kind: "daylight", daylightFraction: 0.62 },
+-    sunrise: { hour: 6, minute: 18 }, sunset: { hour: 19, minute: 42 },
+-    airQualityIndex: 38, airQualityCategory: "good",
+-    uvIndex: 6, uvCategory: "high",
+-    windKph: 13, windDirectionDegrees: 292, humidity: 64,
+-    visibilityKilometers: 16.1, pressureMillibars: 1018, pressureTrend: "rising", precipChance: 5,
++    sunrise: { hour: 6, minute: 18 },
++    sunset: { hour: 19, minute: 42 },
++    airQualityIndex: 38,
++    airQualityCategory: "good",
++    uvIndex: 6,
++    uvCategory: "high",
++    windKph: 13,
++    windDirectionDegrees: 292,
++    humidity: 64,
++    visibilityKilometers: 16.1,
++    pressureMillibars: 1018,
++    pressureTrend: "rising",
++    precipChance: 5,
+   },
+   rainy: {
+-    id: "", temperatureC: 11, highC: 13, lowC: 9, feelsLikeC: 9, dewPointC: 8,
++    id: "",
++    temperatureC: 11,
++    highC: 13,
++    lowC: 9,
++    feelsLikeC: 9,
++    dewPointC: 8,
+     condition: "light_rain",
+     solarProgress: { kind: "daylight", daylightFraction: 0.45 },
+-    sunrise: { hour: 6, minute: 42 }, sunset: { hour: 19, minute: 18 },
+-    airQualityIndex: 22, airQualityCategory: "good",
+-    uvIndex: 1, uvCategory: "low",
+-    windKph: 23, windDirectionDegrees: 225, humidity: 89,
+-    visibilityKilometers: 9.7, pressureMillibars: 1006, pressureTrend: "falling", precipChance: 78,
++    sunrise: { hour: 6, minute: 42 },
++    sunset: { hour: 19, minute: 18 },
++    airQualityIndex: 22,
++    airQualityCategory: "good",
++    uvIndex: 1,
++    uvCategory: "low",
++    windKph: 23,
++    windDirectionDegrees: 225,
++    humidity: 89,
++    visibilityKilometers: 9.7,
++    pressureMillibars: 1006,
++    pressureTrend: "falling",
++    precipChance: 78,
+   },
+   snowy: {
+-    id: "", temperatureC: -4, highC: -2, lowC: -10, feelsLikeC: -8, dewPointC: -7,
++    id: "",
++    temperatureC: -4,
++    highC: -2,
++    lowC: -10,
++    feelsLikeC: -8,
++    dewPointC: -7,
+     condition: "light_snow",
+-    solarProgress: { kind: "daylight", daylightFraction: 0.50 },
+-    sunrise: { hour: 7, minute: 14 }, sunset: { hour: 17, minute: 38 },
+-    airQualityIndex: 18, airQualityCategory: "good",
+-    uvIndex: 2, uvCategory: "low",
+-    windKph: 10, windDirectionDegrees: 270, humidity: 78,
+-    visibilityKilometers: 6.4, pressureMillibars: 1022, pressureTrend: "steady", precipChance: 65,
++    solarProgress: { kind: "daylight", daylightFraction: 0.5 },
++    sunrise: { hour: 7, minute: 14 },
++    sunset: { hour: 17, minute: 38 },
++    airQualityIndex: 18,
++    airQualityCategory: "good",
++    uvIndex: 2,
++    uvCategory: "low",
++    windKph: 10,
++    windDirectionDegrees: 270,
++    humidity: 78,
++    visibilityKilometers: 6.4,
++    pressureMillibars: 1022,
++    pressureTrend: "steady",
++    precipChance: 65,
+   },
+   night: {
+-    id: "", temperatureC: 3, highC: 6, lowC: 1, feelsLikeC: 1, dewPointC: 0,
++    id: "",
++    temperatureC: 3,
++    highC: 6,
++    lowC: 1,
++    feelsLikeC: 1,
++    dewPointC: 0,
+     condition: "clear_night",
+     solarProgress: { kind: "after_sunset", daylightFraction: null },
+-    sunrise: { hour: 5, minute: 46 }, sunset: { hour: 20, minute: 24 },
+-    airQualityIndex: 12, airQualityCategory: "good",
+-    uvIndex: 0, uvCategory: "none",
+-    windKph: 6, windDirectionDegrees: 0, humidity: 71,
+-    visibilityKilometers: 16.1, pressureMillibars: 1014, pressureTrend: "steady", precipChance: 8,
++    sunrise: { hour: 5, minute: 46 },
++    sunset: { hour: 20, minute: 24 },
++    airQualityIndex: 12,
++    airQualityCategory: "good",
++    uvIndex: 0,
++    uvCategory: "none",
++    windKph: 6,
++    windDirectionDegrees: 0,
++    humidity: 71,
++    visibilityKilometers: 16.1,
++    pressureMillibars: 1014,
++    pressureTrend: "steady",
++    precipChance: 8,
+   },
+   stormy: {
+-    id: "", temperatureC: 22, highC: 26, lowC: 20, feelsLikeC: 24, dewPointC: 19,
++    id: "",
++    temperatureC: 22,
++    highC: 26,
++    lowC: 20,
++    feelsLikeC: 24,
++    dewPointC: 19,
+     condition: "thunderstorms",
+     solarProgress: { kind: "daylight", daylightFraction: 0.78 },
+-    sunrise: { hour: 6, minute: 8 }, sunset: { hour: 19, minute: 52 },
+-    airQualityIndex: 55, airQualityCategory: "moderate",
+-    uvIndex: 3, uvCategory: "moderate",
+-    windKph: 35, windDirectionDegrees: 180, humidity: 86,
+-    visibilityKilometers: 4.8, pressureMillibars: 998, pressureTrend: "falling", precipChance: 92,
++    sunrise: { hour: 6, minute: 8 },
++    sunset: { hour: 19, minute: 52 },
++    airQualityIndex: 55,
++    airQualityCategory: "moderate",
++    uvIndex: 3,
++    uvCategory: "moderate",
++    windKph: 35,
++    windDirectionDegrees: 180,
++    humidity: 86,
++    visibilityKilometers: 4.8,
++    pressureMillibars: 998,
++    pressureTrend: "falling",
++    precipChance: 92,
+   },
+ };
+ 
 -- 
-2.50.1 (Apple Git-155)
+2.54.0
 
